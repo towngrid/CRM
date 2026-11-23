@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import Papa from "papaparse";
 import type { SalonEnrichmentRow } from "@shared/schema";
 import { directoryObject } from "@shared/directoryEligibility";
@@ -6,9 +6,10 @@ import { sameLead, unifiedUploadRow } from "./leadWorkspacePolicy";
 
 // Read-only compatibility for the restored file: old staging omitted its review
 // columns and clipped notes. Exact identity AND the same saved candidate are required.
-const original = Papa.parse<Record<string, string>>(readFileSync(
-  new URL("../reports/salon-36-sales-lead-review.csv", import.meta.url), "utf8",
-), { header: true, skipEmptyLines: true }).data;
+// The old salon list (reports/) is not part of the TownGrid branch, so there is nothing to recover from.
+const originalFile = new URL("../reports/salon-36-sales-lead-review.csv", import.meta.url);
+const original = existsSync(originalFile) ? Papa.parse<Record<string, string>>(readFileSync(originalFile, "utf8"),
+  { header: true, skipEmptyLines: true }).data : [];
 export function recoveredLeadEvidence(row: SalonEnrichmentRow): SalonEnrichmentRow {
   const source = directoryObject(row.sourceData);
   if (source.originalInput || !["staged_unverified", "verification_attempted"].includes(String(source.stagingState))) return row;

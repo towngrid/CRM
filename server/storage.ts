@@ -74,7 +74,6 @@ import { reserveRecipientLog } from "./recipientOutreach";
 import type { RecipientEnrollmentOptions } from "./recipientPolicy";
 import { eq, desc, and, sql, gte, lte, lt, or, ne, inArray, isNull } from "drizzle-orm";
 import { savedSerpBudget } from "@shared/serpBudget";
-import { DIRECTORY_FIRST_STRATEGY, DIRECTORY_TRACKS, directoryEmailSequenceTemplates } from "./directoryEmailSequences";
 import { importableSalonEmail } from "./bookingPageEmail";
 import { salonReportSendRejection } from "./salonSearchReport";
 import { directoryEligibility } from "@shared/directoryEligibility";
@@ -1195,27 +1194,6 @@ export class DatabaseStorage implements IStorage {
       .orderBy(emailSequences.sequenceNumber);
   }
 
-  async ensureDirectoryEmailSequences(userId: string): Promise<void> {
-    const existing = await db.select({
-      sequenceTrack: emailSequences.sequenceTrack,
-      sequenceNumber: emailSequences.sequenceNumber,
-    }).from(emailSequences).where(and(
-      eq(emailSequences.userId, userId),
-      eq(emailSequences.strategy, DIRECTORY_FIRST_STRATEGY),
-    ));
-    const existingKeys = new Set(existing.map(sequence => `${sequence.sequenceTrack}:${sequence.sequenceNumber}`));
-    const missing = directoryEmailSequenceTemplates.filter(
-      sequence => !existingKeys.has(`${sequence.sequenceTrack}:${sequence.sequenceNumber}`),
-    );
-    if (missing.length > 0) {
-      await db.insert(emailSequences).values(missing.map(sequence => ({
-        ...sequence,
-        userId,
-        scheduledDate: sequence.scheduledDate ? new Date(sequence.scheduledDate) : null,
-      }))).onConflictDoNothing();
-    }
-  }
-
   async getEmailSequencesByTrack(userId: string | null, track: string): Promise<EmailSequence[]> {
     if (userId === null) {
       // Admin: get all sequences for track
@@ -1378,19 +1356,13 @@ export class DatabaseStorage implements IStorage {
         // - bare "custom" track → accepts any contact (full bypass)
         // - "salon_custom" / "mobile_custom" → accepts any salon/mobile contact
         //   regardless of whether they use software (these are the "General" tracks)
-        // - "salon_competitor_moego" / "mobile_competitor_moego" → accepts contacts
-        //   whose software is MoeGo (contactTrack = competitor_moego) OR any contact
-        //   on the generic uses_competitor track for that business type
         // - all other tracks → contact track must match exactly
         const seqTrack = sequence.sequenceTrack;
         const bType = contact.businessType === "mobile" ? "mobile" : "salon";
         const contactTrack = contact.sequenceTrack ||
           `${bType}_${contact.usesSoftware === "Yes" ? "uses_competitor" : "no_software"}`;
 
-        if ((DIRECTORY_TRACKS as readonly string[]).includes(seqTrack)) {
-          // Directory-first audiences are chosen intentionally at enrollment time
-          // and do not alter or depend on the contact's legacy classification.
-        } else if (seqTrack === "custom") {
+        if (seqTrack === "custom") {
           // bare custom — no restriction
         } else if (seqTrack === "salon_custom" || seqTrack === "mobile_custom") {
           // Prefixed general track — only check business type prefix
@@ -1399,28 +1371,6 @@ export class DatabaseStorage implements IStorage {
             failed.push({
               contactId,
               error: `This sequence is for ${seqBizType} businesses but contact is a ${bType} business`
-            });
-            continue;
-          }
-        } else if (seqTrack === `${bType}_competitor_moego`) {
-          // Competitor-specific track (MoeGo) — accepts contacts explicitly
-          // on this competitor track OR on the general uses_competitor track
-          const allowedTracks = [`${bType}_competitor_moego`, `${bType}_uses_competitor`];
-          if (!allowedTracks.includes(contactTrack)) {
-            failed.push({
-              contactId,
-              error: `Contact (track: ${contactTrack}) is not on a competitor track for ${bType}`
-            });
-            continue;
-          }
-        } else if (seqTrack === `${bType}_competitor_groomerio`) {
-          // Competitor-specific track (Groomer.io) — accepts contacts explicitly
-          // on this competitor track OR on the general uses_competitor track
-          const allowedTracks = [`${bType}_competitor_groomerio`, `${bType}_uses_competitor`];
-          if (!allowedTracks.includes(contactTrack)) {
-            failed.push({
-              contactId,
-              error: `Contact (track: ${contactTrack}) is not on a competitor track for ${bType}`
             });
             continue;
           }

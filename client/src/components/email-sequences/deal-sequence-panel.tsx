@@ -20,28 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { Contact, EmailSequence, EmailSequenceLog } from "@shared/schema";
 
 const QUICK_LINKS: { label: string; html: string; description?: string }[] = [
-  { label: "Visit EsyPet",        html: '<a href="https://software.esypet.com/">Visit EsyPet</a>' },
-  { label: "Pricing",             html: '<a href="https://software.esypet.com/pricing/">Pricing</a>' },
-  {
-    label: "Video: Getting Set Up",
-    html: '<a href="https://esy.pet/Salon-SignUp">&#9654; Video: Getting Set Up</a>',
-    description: "How quick and easy it is to get a salon up and running. They visit signup.esypet.net and set up salon images, employee images, prices, and services.",
-  },
-  {
-    label: "Video: Customization",
-    html: '<a href="https://esy.pet/Lib_Dir_temp">&#9654; Video: Customization</a>',
-    description: "Shows how customizable the software is — setting up directories and libraries to customize prices, sizes, breeds, service names (main and add-on), and grooming note templates.",
-  },
-  {
-    label: "Video: Pet Parent Registration",
-    html: '<a href="https://esy.pet/Reg_Settings">&#9654; Video: Pet Parent Registration</a>',
-    description: "How a pet parent registers with the salon to book a groom. Covers notification preferences and how they access their records — vaccination records, credit card on file, and profile info.",
-  },
-  {
-    label: "Video: Apps & Wellness Check",
-    html: '<a href="https://esy.pet/Cal_Apps">&#9654; Video: Apps &amp; Wellness Check</a>',
-    description: "A look at the two main apps — the Salon App and the Pet Parent App — plus the booking calendar. Walks through a groomer and a bather checking in a pet and completing grooming steps. Also includes the 7-point Wellness Check.",
-  },
+  { label: "Visit TownGrid", html: '<a href="https://towngrid.net/">Visit TownGrid</a>' },
 ];
 
 interface DealSequencePanelProps {
@@ -51,13 +30,9 @@ interface DealSequencePanelProps {
 const TRACK_LABELS: Record<string, string> = {
   salon_no_software: "Salon - No Software",
   salon_uses_competitor: "Salon - Uses Competitor (Any)",
-  salon_competitor_moego: "Salon - MoeGo",
-  salon_competitor_groomerio: "Salon - Groomer.io",
   salon_custom: "Salon - General",
   mobile_no_software: "Mobile - No Software",
   mobile_uses_competitor: "Mobile - Uses Competitor (Any)",
-  mobile_competitor_moego: "Mobile - MoeGo",
-  mobile_competitor_groomerio: "Mobile - Groomer.io",
   mobile_custom: "Mobile - General",
   // Legacy fallbacks
   no_software: "No Software",
@@ -68,13 +43,9 @@ const TRACK_LABELS: Record<string, string> = {
 const TRACK_COLORS: Record<string, string> = {
   salon_no_software: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
   salon_uses_competitor: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
-  salon_competitor_moego: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-  salon_competitor_groomerio: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
   salon_custom: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
   mobile_no_software: "bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300",
   mobile_uses_competitor: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  mobile_competitor_moego: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-  mobile_competitor_groomerio: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
   mobile_custom: "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300",
   // Legacy fallbacks
   no_software: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",

@@ -85,7 +85,7 @@ export default function Sidebar() {
           <Users className="h-4 w-4 text-primary-foreground" />
         </div>
         {!collapsed && (
-          <h1 className="ml-2 text-xl font-bold text-foreground">ESyCRM</h1>
+          <h1 className="ml-2 text-xl font-bold text-foreground">TownGrid CRM</h1>
         )}
       </div>
 

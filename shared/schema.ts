@@ -18,8 +18,8 @@ export const sessions = pgTable(
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
-  workEmail: varchar("work_email"), // Professional email for sending sequences (e.g., seann@esypet.com)
-  replyToEmail: varchar("reply_to_email"), // Reply-to address for inbound parse (e.g., seann@inbound.esypet.com)
+  workEmail: varchar("work_email"), // Professional email for sending sequences (e.g., seann@towngrid.contact)
+  replyToEmail: varchar("reply_to_email"), // Reply-to address for inbound parse (e.g., seann@towngrid.contact)
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   phone: varchar("phone"),
@@ -63,7 +63,7 @@ export const contacts = pgTable("contacts", {
   instagramHandle: text("instagram_handle"),
   secondaryFirstName: text("secondary_first_name"),
   secondaryLastName: text("secondary_last_name"),
-  leadSource: text("lead_source"), // Inbound, Outbound, Cold Call, Facebook Ad, Referral, Event, EsyPet Website Form, Google Search
+  leadSource: text("lead_source"), // Inbound, Outbound, Cold Call, Facebook Ad, Referral, Event, TownGrid Website Form, Google Search
   currentSoftware: text("current_software"),
   bookingSoftwareUrl: text("booking_software_url"),
   numberOfEmployees: integer("number_of_employees"),

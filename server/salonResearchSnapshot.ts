@@ -109,7 +109,7 @@ export function readResearchSnapshot(hourlyLimit = 20): ResearchSnapshot | null 
 // Domain-separated service authentication permits research-only synchronization,
 // never contact approval/import/sending. No session cookies or raw secret travel.
 export function researchSignature(secret: string, timestamp: string, body: string): string {
-  const key = createHmac("sha256", secret).update("esyPet:salon-research-sync:v1").digest();
+  const key = createHmac("sha256", secret).update("towngrid:salon-research-sync:v1").digest();
   return createHmac("sha256", key).update(`${timestamp}\nPOST\n${SYNC_PATH}\n${body}`).digest("hex");
 }
 export function verifyResearchSignature(secret: string | undefined, timestamp: string,

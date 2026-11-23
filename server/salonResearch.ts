@@ -268,7 +268,6 @@ export function registerSalonResearchRoutes(app: Express, authenticated: Request
 }
 
 let syncBusy = false;
-let lastRemoteHash = "";
 let lastErrorLogAt = 0;
 async function synchronize() {
   if (syncBusy || process.env.NODE_ENV === "production") return;
@@ -278,27 +277,7 @@ async function synchronize() {
     if (!snapshot) return;
     const batch = await researchBatch();
     if (batch && !unchanged(batch, snapshot)) await applySnapshot(batch.id, snapshot);
-    // Opt-in only. Do not set this until production publishing/sync is approved.
-    const target = process.env.SALON_RESEARCH_SYNC_URL;
-    if (!target) return;
-    const url = new URL(target);
-    if (url.protocol !== "https:" || url.username || url.password ||
-        url.pathname !== "/" || url.search || url.hash) throw new Error("Invalid research synchronization target");
-    if (!process.env.SESSION_SECRET) throw new Error("Research service authentication unavailable");
-    const hash = digest(snapshot);
-    if (hash === lastRemoteHash) return;
-    const timestamp = String(Date.now());
-    const body = JSON.stringify(snapshot);
-    const response = await fetch(new URL(SYNC_PATH, url), {
-      method: "POST", redirect: "error", signal: AbortSignal.timeout(15000),
-      headers: { "Content-Type": "application/json", "x-research-timestamp": timestamp,
-        "x-research-signature": researchSignature(process.env.SESSION_SECRET, timestamp, body) },
-      body,
-    });
-    if (!response.ok) throw new Error("Research synchronization target is not ready");
-    const acknowledgment = await response.json();
-    if (acknowledgment.synchronized !== true) throw new Error("Research synchronization was not acknowledged");
-    lastRemoteHash = hash;
+    // TownGrid never sends research to another app (the old push to the previous app was removed).
   } catch {
     // No secrets, payloads, contact addresses, or raw provider errors in logs.
     if (Date.now() - lastErrorLogAt > 300000) {

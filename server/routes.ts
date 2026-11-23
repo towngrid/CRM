@@ -45,7 +45,7 @@ import { isRetryableStagedSalonRow, MAX_SALON_LIST_JSON_BYTES, MAX_SALON_LIST_RO
 import { registerSalonResearchRoutes } from "./salonResearch";
 import { rejectResearchExecution, isResearchDirectoryRow, RESEARCH_READ_ONLY } from "./salonResearchPolicy";
 import { pipelineEmailQueryScope } from "./pipelineEmailSummary";
-import salonSearchPilot from "../reports/salon-next-100-summary.json" with { type: "json" };
+import { APP_NAME, getAdminAlertEmails, getAppUrl } from "./appConfig";
 
 // ─── Sequence Test Runner (in-memory) ────────────────────────────────────────
 interface TestStepResult {
@@ -113,7 +113,7 @@ async function runSequenceTest(run: TestRun): Promise<void> {
         to: run.toEmail,
         subject,
         body,
-        fromName: `[TEST] ${salesperson.firstName || "EsyPet"}`,
+        fromName: `[TEST] ${salesperson.firstName || "TownGrid"}`,
       });
 
       if (result.success) {
@@ -150,12 +150,12 @@ async function runSequenceTest(run: TestRun): Promise<void> {
       ``,
       ...summaryLines,
       ``,
-      `https://EsyPet-CRM.replit.app`,
+      getAppUrl(),
     ].join("\n");
 
     await sendEmail({
       to: run.adminEmail,
-      subject: `EsyPet Sequence Test Complete – ${sent}/5 sent`,
+      subject: `${APP_NAME} Sequence Test Complete – ${sent}/5 sent`,
       body: summaryBody,
     });
   } catch (err) {
@@ -702,7 +702,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const path of paths) {
           try {
             const r = await fetch(`${base.origin}${path}`, {
-              headers: { "User-Agent": "Mozilla/5.0 (compatible; EsyCRM/1.0)" },
+              headers: { "User-Agent": "Mozilla/5.0 (compatible; TownGridCRM/1.0)" },
               signal: AbortSignal.timeout(8000),
             });
             if (!r.ok) {
@@ -1489,15 +1489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const bType = contact.businessType || "salon";
           let sequenceTrack: string;
           if (contact.usesSoftware === "Yes") {
-            // Check if we know the specific competitor — assign a targeted track when possible
-            const software = (contact.currentSoftware || "").toLowerCase();
-            if (software.includes("moego") || software.includes("moe go")) {
-              sequenceTrack = `${bType}_competitor_moego`;
-            } else if (software.includes("groomer.io") || software.includes("groomerio")) {
-              sequenceTrack = `${bType}_competitor_groomerio`;
-            } else {
-              sequenceTrack = `${bType}_uses_competitor`;
-            }
+            sequenceTrack = `${bType}_uses_competitor`;
           } else {
             sequenceTrack = `${bType}_no_software`;
           }
@@ -1564,8 +1556,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         const newLabel = stageLabelMap[dealData.stage] ?? dealData.stage;
         const oldLabel = stageLabelMap[beforeDeal.stage] ?? beforeDeal.stage;
-        const adminEmails = ["seann@esypet.com", "ravin@esypet.com", "srinath@esyntaxis.com"];
-        const subject = `EsyPet CRM — Deal Stage Updated: ${deal.title}`;
+        const adminEmails = getAdminAlertEmails();
+        const subject = `${APP_NAME} — Deal Stage Updated: ${deal.title}`;
         const textBody = [
           `Deal Stage Change Notification`,
           ``,
@@ -1963,8 +1955,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const actorName = actor ? `${actor.firstName ?? ""} ${actor.lastName ?? ""}`.trim() || actor.email || actorId : actorId;
         const contact = deal.contactId ? await storage.getContact(deal.contactId, null) : null;
         const contactName = contact ? `${contact.firstName} ${contact.lastName}` : "N/A";
-        const adminEmails = ["seann@esypet.com", "ravin@esypet.com", "srinath@esyntaxis.com"];
-        const subject = `EsyPet CRM — Deal Won: ${deal.title}`;
+        const adminEmails = getAdminAlertEmails();
+        const subject = `${APP_NAME} — Deal Won: ${deal.title}`;
         const textBody = [
           `Deal Won Notification`,
           ``,
@@ -2132,7 +2124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const notesSection = period.notes ? `<div style="margin-top:20px;padding:12px;background:#f9fafb;border-radius:6px;"><strong>Notes:</strong> ${period.notes}</div>` : "";
 
-      const html = `<div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;background:#fff;padding:32px;"><h1 style="color:#111827;font-size:22px;margin-bottom:4px;">Commission Pay Statement</h1><p style="color:#6b7280;margin-bottom:24px;">${period.salespersonName} &bull; ${periodLabel}</p><table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;"><thead><tr style="background:#f9fafb;"><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Date</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Contact</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Deal</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Plan</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Type</th><th style="padding:10px 12px;text-align:right;font-size:13px;color:#374151;">Amount</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Notes</th></tr></thead><tbody>${lineRows}</tbody><tfoot><tr style="background:#f0fdf4;"><td colspan="5" style="padding:12px;font-weight:700;color:#111827;">Total Pay for Period</td><td style="padding:12px;text-align:right;font-weight:700;font-size:16px;color:#16a34a;">$${parseFloat(period.totalAmount).toFixed(2)}</td><td></td></tr></tfoot></table>${notesSection}<p style="margin-top:24px;color:#9ca3af;font-size:11px;">Generated by ESyCRM on ${fmtDate(new Date(), "MMMM d, yyyy")}.</p></div>`;
+      const html = `<div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;background:#fff;padding:32px;"><h1 style="color:#111827;font-size:22px;margin-bottom:4px;">Commission Pay Statement</h1><p style="color:#6b7280;margin-bottom:24px;">${period.salespersonName} &bull; ${periodLabel}</p><table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;"><thead><tr style="background:#f9fafb;"><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Date</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Contact</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Deal</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Plan</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Type</th><th style="padding:10px 12px;text-align:right;font-size:13px;color:#374151;">Amount</th><th style="padding:10px 12px;text-align:left;font-size:13px;color:#374151;">Notes</th></tr></thead><tbody>${lineRows}</tbody><tfoot><tr style="background:#f0fdf4;"><td colspan="5" style="padding:12px;font-weight:700;color:#111827;">Total Pay for Period</td><td style="padding:12px;text-align:right;font-weight:700;font-size:16px;color:#16a34a;">$${parseFloat(period.totalAmount).toFixed(2)}</td><td></td></tr></tfoot></table>${notesSection}<p style="margin-top:24px;color:#9ca3af;font-size:11px;">Generated by TownGrid CRM on ${fmtDate(new Date(), "MMMM d, yyyy")}.</p></div>`;
 
       const allRecipients = [period.salespersonEmail, ...additionalEmails].filter(Boolean);
       for (const email of allRecipients) {
@@ -2152,8 +2144,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserIdForQuery(req.user);
       const track = req.query.track as string | undefined;
-      const sequenceOwnerId = userId ?? req.user.claims.sub;
-      await storage.ensureDirectoryEmailSequences(sequenceOwnerId);
       
       let sequences;
       if (track) {
@@ -2880,59 +2870,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/salon-search-report/load-pilot", isAuthenticated, async (req: any, res) => {
-    try {
-      const result = await saveSalonSearchReport(req.user.claims.sub as string, {
-        name: "Salon public web review pilot",
-        reviewed: salonSearchPilot.reviewed,
-      }, true);
-      const bundledSeeds: Record<string, OwnerNameResult> = {};
-      const bundledRows = (salonSearchPilot as any).reviewed as Array<Record<string, unknown>>;
-      for (const entry of bundledRows || []) {
-        const placeId = typeof entry["Google Place ID"] === "string" ? entry["Google Place ID"].trim() : "";
-        const raw = entry.ownerName as Partial<OwnerNameResult> | undefined;
-        if (!placeId || !raw || !Array.isArray(raw.candidates)) continue;
-        const candidates = raw.candidates.flatMap((candidate: any) => {
-          if (!candidate || typeof candidate.firstName !== "string" || !candidate.firstName.trim() ||
-              typeof candidate.id !== "string" || typeof candidate.role !== "string") return [];
-          const sources = Array.isArray(candidate.sources) ? candidate.sources.flatMap((source: any) => {
-            if (!source || typeof source.url !== "string" || typeof source.excerpt !== "string" ||
-                typeof source.kind !== "string") return [];
-            return [{ url: source.url, excerpt: source.excerpt.slice(0, 800), kind: source.kind }];
-          }) : [];
-          return [{
-            id: candidate.id,
-            firstName: candidate.firstName,
-            lastName: typeof candidate.lastName === "string" ? candidate.lastName : null,
-            role: candidate.role,
-            roleConfirmed: candidate.roleConfirmed === true,
-            businessMatched: candidate.businessMatched === true,
-            confidence: ["high", "medium", "low"].includes(candidate.confidence) ? candidate.confidence : "low",
-            sources,
-          }] as SalonOwnerNameCandidate[];
-        });
-        bundledSeeds[placeId] = {
-          ...EMPTY_OWNER_NAME_RESULT,
-          status: candidates.length ? "needs_review" : "not_found",
-          candidates,
-          selectedCandidateId: null,
-          approvedAt: null,
-          usePersonalName: false,
-          providerCalls: 0,
-          pagesFetched: Number.isInteger(raw.pagesFetched) ? Math.max(0, raw.pagesFetched as number) : 0,
-          ...(typeof raw.error === "string" ? { error: raw.error } : {}),
-          ...(typeof raw.lookedUpAt === "string" ? { lookedUpAt: raw.lookedUpAt } : {}),
-        };
-      }
-      const seededOwnerNames = result.status < 300 && Object.keys(bundledSeeds).length
-        ? await storage.seedSalonReportOwnerNames(bundledSeeds, req.user.claims.sub as string)
-        : 0;
-      const body = { ...result.body, seededOwnerNames };
-      res.status(result.status).json(body);
-    } catch (error) {
-      if (error instanceof z.ZodError) return res.status(500).json({ message: "The bundled salon search pilot is invalid", errors: error.errors });
-      console.error("Failed to load bundled salon search pilot:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to load bundled salon search pilot" });
-    }
+    // The bundled old salon pilot list was removed from the TownGrid branch.
+    res.status(410).json({ message: "The old salon pilot list is not part of TownGrid CRM." });
   });
 
   app.delete("/api/salon-search-report/rows/:id", isAuthenticated, async (req: any, res) => {
@@ -3977,8 +3916,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { sendEmail } = await import("./sendgrid");
       const result = await sendEmail({
         to: toEmail,
-        subject: "EsyPet CRM — Brevo Connection Test",
-        body: "Your Brevo API key is working correctly.\n\nYou can now use email sequences in EsyPet CRM.\n\nhttps://EsyPet-CRM.replit.app",
+        subject: `${APP_NAME} — Brevo Connection Test`,
+        body: `Your Brevo API key is working correctly.\n\nYou can now use email sequences in ${APP_NAME}.\n\n${getAppUrl()}`,
       });
 
       if (result.success) {

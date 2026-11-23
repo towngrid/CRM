@@ -318,7 +318,7 @@ export default function AdminUsers() {
                     <FormItem>
                       <FormLabel>From Email (sends sequences)</FormLabel>
                       <FormControl>
-                        <Input placeholder="john@esypet.com" {...field} data-testid="input-new-user-workemail" />
+                        <Input placeholder="john@towngrid.net" {...field} data-testid="input-new-user-workemail" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -331,7 +331,7 @@ export default function AdminUsers() {
                     <FormItem>
                       <FormLabel>Reply-To Email (for CRM Inbox)</FormLabel>
                       <FormControl>
-                        <Input placeholder="john@inbound.esypet.com" {...field} data-testid="input-new-user-replytoemail" />
+                        <Input placeholder="john@towngrid.contact" {...field} data-testid="input-new-user-replytoemail" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -445,7 +445,7 @@ export default function AdminUsers() {
                   <FormItem>
                     <FormLabel>From Email (sends sequences)</FormLabel>
                     <FormControl>
-                      <Input placeholder="john@esypet.com" {...field} data-testid="input-edit-user-workemail" />
+                      <Input placeholder="john@towngrid.net" {...field} data-testid="input-edit-user-workemail" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -458,7 +458,7 @@ export default function AdminUsers() {
                   <FormItem>
                     <FormLabel>Reply-To Email (for CRM Inbox)</FormLabel>
                     <FormControl>
-                      <Input placeholder="john@inbound.esypet.com" {...field} data-testid="input-edit-user-replytoemail" />
+                      <Input placeholder="john@towngrid.contact" {...field} data-testid="input-edit-user-replytoemail" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

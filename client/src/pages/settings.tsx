@@ -172,13 +172,13 @@ export default function Settings() {
                       <FormLabel>From Email Address</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="seann@esypet.com" 
+                          placeholder="seann@towngrid.contact" 
                           {...field} 
                           data-testid="input-work-email"
                         />
                       </FormControl>
                       <FormDescription>
-                        This address appears as the sender on all outgoing email sequences (e.g., seann@esypet.app). Must be a verified sender in Brevo.
+                        This address appears as the sender on all outgoing email sequences (e.g., seann@towngrid.contact).
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -192,13 +192,13 @@ export default function Settings() {
                       <FormLabel>Reply-To Email Address</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="seann@inbound.esypet.com" 
+                          placeholder="seann@towngrid.contact" 
                           {...field} 
                           data-testid="input-reply-to-email"
                         />
                       </FormControl>
                       <FormDescription>
-                        Where lead replies are routed for the CRM Inbox (e.g., seann@inbound.esypet.app). Must be set up with Brevo Inbound Parsing. If left blank, replies go to your From address.
+                        Where lead replies are routed for the CRM Inbox (e.g., seann@towngrid.contact). If left blank, replies go to your From address.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

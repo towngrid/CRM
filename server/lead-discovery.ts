@@ -133,8 +133,6 @@ const BOOKING_SOFTWARE_PATTERNS: Record<string, string> = {
   "thryv.com": "Thryv",
   "mindbodyonline.com": "Mindbody",
   "wix.com": "Wix Booking",
-  "booking.esypet.com": "EsyPet",
-  "esypet.com": "EsyPet",
   "groomer.io": "Groomer.io",
 };
 

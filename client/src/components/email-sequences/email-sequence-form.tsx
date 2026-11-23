@@ -22,30 +22,7 @@ interface EmailSequenceFormProps {
 }
 
 const LINKS: { label: string; html: string; description?: string }[] = [
-  { label: "Visit EsyPet",        html: '<a href="https://software.esypet.com/">Visit EsyPet</a>' },
-  { label: "Get Listed Free",     html: '<a href="https://signup.esypet.net/?plan=95625be6-a031-4015-afb7-ba0fdd3f5798">Get Listed Free</a>' },
-  { label: "How Free Listing Works", html: '<a href="https://software.esypet.com/free-network-explained/">How the Free Listing Works</a>' },
-  { label: "Pricing",             html: '<a href="https://software.esypet.com/pricing/">See Full Pricing</a>' },
-  {
-    label: "Video: Getting Set Up",
-    html: '<a href="https://esy.pet/Salon-SignUp">&#9654; Video: Getting Set Up</a>',
-    description: "How quick and easy it is to get a salon up and running. They visit signup.esypet.net and set up salon images, employee images, prices, and services.",
-  },
-  {
-    label: "Video: Customization",
-    html: '<a href="https://esy.pet/Lib_Dir_temp">&#9654; Video: Customization</a>',
-    description: "Shows how customizable the software is — setting up directories and libraries to customize prices, sizes, breeds, service names (main and add-on), and grooming note templates.",
-  },
-  {
-    label: "Video: Pet Parent Registration",
-    html: '<a href="https://esy.pet/Reg_Settings">&#9654; Video: Pet Parent Registration</a>',
-    description: "How a pet parent registers with the salon to book a groom. Covers notification preferences and how they access their records — vaccination records, credit card on file, and profile info.",
-  },
-  {
-    label: "Video: Apps & Wellness Check",
-    html: '<a href="https://esy.pet/Cal_Apps">&#9654; Video: Apps &amp; Wellness Check</a>',
-    description: "A look at the two main apps — the Salon App and the Pet Parent App — plus the booking calendar. Walks through a groomer and a bather checking in a pet and completing grooming steps. Also includes the 7-point Wellness Check.",
-  },
+  { label: "Visit TownGrid", html: '<a href="https://towngrid.net/">Visit TownGrid</a>' },
 ];
 
 export default function EmailSequenceForm({ sequence, onSuccess, onCancel }: EmailSequenceFormProps) {

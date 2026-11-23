@@ -19,7 +19,7 @@ const BUILTIN_SOFTWARE = [
   "Square", "TimeToPet",
 ];
 
-const CUSTOM_SOFTWARE_KEY = "esycrm_custom_software";
+const CUSTOM_SOFTWARE_KEY = "towngridcrm_custom_software";
 
 function getCustomSoftware(): string[] {
   try { return JSON.parse(localStorage.getItem(CUSTOM_SOFTWARE_KEY) || "[]"); }
@@ -1013,7 +1013,7 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
                       <SelectItem value="Facebook Ad">Facebook Ad</SelectItem>
                       <SelectItem value="Referral">Referral</SelectItem>
                       <SelectItem value="Event">Event</SelectItem>
-                      <SelectItem value="EsyPet Website Form">EsyPet Website Form</SelectItem>
+                      <SelectItem value="TownGrid Website Form">TownGrid Website Form</SelectItem>
                       <SelectItem value="Google Search">Google Search</SelectItem>
                       <SelectItem value="CRM - Lead Discovery">CRM - Lead Discovery</SelectItem>
                       <SelectItem value="Sales Person acquired">Sales Person acquired</SelectItem>

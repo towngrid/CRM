@@ -15,10 +15,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type BusinessType = "salon" | "mobile";
-type SubTrack = "no_software" | "uses_competitor" | "competitor_moego" | "competitor_groomerio" | "custom";
+type SubTrack = "no_software" | "uses_competitor" | "custom";
 type SequenceTrack = `${BusinessType}_${SubTrack}`;
-type DirectoryTrack = "directory_general" | "directory_has_software" | "directory_no_software";
-type AnySequenceTrack = SequenceTrack | DirectoryTrack;
+type AnySequenceTrack = SequenceTrack;
 
 export default function EmailSequences() {
   const [reconciliationId,setReconciliationId]=useState("");
@@ -41,8 +40,6 @@ export default function EmailSequences() {
   });
   const [activeBiz, setActiveBiz] = useState<BusinessType>("salon");
   const [activeSub, setActiveSub] = useState<SubTrack>("no_software");
-  const [activeStrategy, setActiveStrategy] = useState<"legacy" | "directory_first">("legacy");
-  const [activeDirectoryTrack, setActiveDirectoryTrack] = useState<DirectoryTrack>("directory_general");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedSequence, setSelectedSequence] = useState<EmailSequence | undefined>();
   const [isAddContactsOpen, setIsAddContactsOpen] = useState(false);
@@ -53,34 +50,18 @@ export default function EmailSequences() {
 
   const { data: salonNoSoftware,         isLoading: loadingSNS  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=salon_no_software"] });
   const { data: salonCompetitor,         isLoading: loadingSC   } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=salon_uses_competitor"] });
-  const { data: salonMoeGo,              isLoading: loadingSMG  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=salon_competitor_moego"] });
-  const { data: salonGroomerio,          isLoading: loadingSGR  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=salon_competitor_groomerio"] });
   const { data: salonCustom,             isLoading: loadingSCu  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=salon_custom"] });
   const { data: mobileNoSoftware,        isLoading: loadingMNS  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=mobile_no_software"] });
   const { data: mobileCompetitor,        isLoading: loadingMC   } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=mobile_uses_competitor"] });
-  const { data: mobileMoeGo,             isLoading: loadingMMG  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=mobile_competitor_moego"] });
-  const { data: mobileGroomerio,         isLoading: loadingMGR  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=mobile_competitor_groomerio"] });
   const { data: mobileCustom,            isLoading: loadingMCu  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=mobile_custom"] });
-  const { data: directoryGeneral,        isLoading: loadingDG   } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=directory_general"] });
-  const { data: directoryHasSoftware,    isLoading: loadingDHS  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=directory_has_software"] });
-  const { data: directoryNoSoftware,     isLoading: loadingDNS  } = useQuery<EmailSequence[]>({ queryKey: ["/api/email-sequences?track=directory_no_software"] });
 
   const trackData: Record<SequenceTrack, { data: EmailSequence[] | undefined; loading: boolean }> = {
     salon_no_software:            { data: salonNoSoftware,   loading: loadingSNS  },
     salon_uses_competitor:        { data: salonCompetitor,   loading: loadingSC   },
-    salon_competitor_moego:       { data: salonMoeGo,        loading: loadingSMG  },
-    salon_competitor_groomerio:   { data: salonGroomerio,    loading: loadingSGR  },
     salon_custom:                 { data: salonCustom,       loading: loadingSCu  },
     mobile_no_software:           { data: mobileNoSoftware,  loading: loadingMNS  },
     mobile_uses_competitor:       { data: mobileCompetitor,  loading: loadingMC   },
-    mobile_competitor_moego:      { data: mobileMoeGo,       loading: loadingMMG  },
-    mobile_competitor_groomerio:  { data: mobileGroomerio,   loading: loadingMGR  },
     mobile_custom:                { data: mobileCustom,      loading: loadingMCu  },
-  };
-  const directoryTrackData: Record<DirectoryTrack, { data: EmailSequence[] | undefined; loading: boolean }> = {
-    directory_general: { data: directoryGeneral, loading: loadingDG },
-    directory_has_software: { data: directoryHasSoftware, loading: loadingDHS },
-    directory_no_software: { data: directoryNoSoftware, loading: loadingDNS },
   };
 
   const activeTrack: SequenceTrack = `${activeBiz}_${activeSub}`;
@@ -310,13 +291,6 @@ export default function EmailSequences() {
       <main className="flex-1 min-h-0 overflow-auto p-6 bg-muted/30" data-testid="email-sequences-content">
         <div className="max-w-6xl mx-auto">
           <p className="mb-4 text-sm text-muted-foreground">Outreach controls which messages and follow-ups are scheduled. Leads are researched and approved separately; Contacts store the business record, and Pipeline tracks the sales opportunity. Review recipient history and confirm enrollment before scheduling.</p>
-          <Tabs value={activeStrategy} onValueChange={(value) => setActiveStrategy(value as "legacy" | "directory_first")} className="space-y-5">
-            <TabsList className="grid w-full grid-cols-2 max-w-md" data-testid="tabs-sequence-strategy">
-              <TabsTrigger value="legacy">Existing Sequences</TabsTrigger>
-              <TabsTrigger value="directory_first">Directory-First</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="legacy">
           {/* Outer: Business Type */}
           <Tabs value={activeBiz} onValueChange={(v) => setActiveBiz(v as BusinessType)} className="space-y-4">
             <TabsList className="grid w-full grid-cols-2 max-w-xs" data-testid="tabs-business-type">
@@ -328,12 +302,10 @@ export default function EmailSequences() {
               <TabsContent key={biz} value={biz} className="space-y-4">
                 {/* Inner: Software track */}
                 <Tabs value={activeSub} onValueChange={(v) => setActiveSub(v as SubTrack)} className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-5 max-w-3xl" data-testid={`tabs-sub-${biz}`}>
+                  <TabsList className="grid w-full grid-cols-3 max-w-2xl" data-testid={`tabs-sub-${biz}`}>
                     <TabsTrigger value="no_software" data-testid={`tab-${biz}-no-software`}>No Software</TabsTrigger>
                     <TabsTrigger value="uses_competitor" data-testid={`tab-${biz}-uses-competitor`}>Uses Competitor - Any</TabsTrigger>
-                    <TabsTrigger value="competitor_moego" data-testid={`tab-${biz}-moego`}>MoeGo</TabsTrigger>
-                    <TabsTrigger value="competitor_groomerio" data-testid={`tab-${biz}-groomerio`}>Groomer.io</TabsTrigger>
-                    <TabsTrigger value="custom" data-testid={`tab-${biz}-general`}>General</TabsTrigger>
+                                                            <TabsTrigger value="custom" data-testid={`tab-${biz}-general`}>General</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="no_software" className="space-y-4">
@@ -356,26 +328,6 @@ export default function EmailSequences() {
                     {renderSequenceTable(trackData[`${biz}_uses_competitor`].data, trackData[`${biz}_uses_competitor`].loading, `${biz}_uses_competitor`)}
                   </TabsContent>
 
-                  <TabsContent value="competitor_moego" className="space-y-4">
-                    <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
-                      <h3 className="font-semibold text-red-900 dark:text-red-100 mb-1">{biz === "salon" ? "Salon" : "Mobile"} — Uses MoeGo Track</h3>
-                      <p className="text-sm text-red-800 dark:text-red-200">
-                        Targeted specifically at {biz} contacts currently using MoeGo. Speak directly to MoeGo's limitations and EsyPet's advantages over it.
-                      </p>
-                    </div>
-                    {renderSequenceTable(trackData[`${biz}_competitor_moego`].data, trackData[`${biz}_competitor_moego`].loading, `${biz}_competitor_moego`)}
-                  </TabsContent>
-
-                  <TabsContent value="competitor_groomerio" className="space-y-4">
-                    <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                      <h3 className="font-semibold text-green-900 dark:text-green-100 mb-1">{biz === "salon" ? "Salon" : "Mobile"} — Uses Groomer.io Track</h3>
-                      <p className="text-sm text-green-800 dark:text-green-200">
-                        Targeted specifically at {biz} contacts currently using Groomer.io. Speak directly to Groomer.io's limitations and EsyPet's advantages over it.
-                      </p>
-                    </div>
-                    {renderSequenceTable(trackData[`${biz}_competitor_groomerio`].data, trackData[`${biz}_competitor_groomerio`].loading, `${biz}_competitor_groomerio`)}
-                  </TabsContent>
-
                   <TabsContent value="custom" className="space-y-4">
                     <div className="p-4 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">{biz === "salon" ? "Salon" : "Mobile"} — General Track</h3>
@@ -389,38 +341,11 @@ export default function EmailSequences() {
               </TabsContent>
             ))}
           </Tabs>
-            </TabsContent>
-
-            <TabsContent value="directory_first" className="space-y-4">
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-lg">
-                <h3 className="font-semibold text-emerald-900 dark:text-emerald-100 mb-1">Directory-First Strategy</h3>
-                <p className="text-sm text-emerald-800 dark:text-emerald-200">
-                  Lead with EsyPet's free directory listing, then introduce software naturally. Each audience receives four emails, one week apart.
-                </p>
-              </div>
-              <Tabs value={activeDirectoryTrack} onValueChange={(value) => setActiveDirectoryTrack(value as DirectoryTrack)} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3 max-w-2xl">
-                  <TabsTrigger value="directory_general">General / Unknown</TabsTrigger>
-                  <TabsTrigger value="directory_has_software">Has Software</TabsTrigger>
-                  <TabsTrigger value="directory_no_software">No Software</TabsTrigger>
-                </TabsList>
-                <TabsContent value="directory_general">
-                  {renderSequenceTable(directoryTrackData.directory_general.data, directoryTrackData.directory_general.loading, "directory_general", 4)}
-                </TabsContent>
-                <TabsContent value="directory_has_software">
-                  {renderSequenceTable(directoryTrackData.directory_has_software.data, directoryTrackData.directory_has_software.loading, "directory_has_software", 4)}
-                </TabsContent>
-                <TabsContent value="directory_no_software">
-                  {renderSequenceTable(directoryTrackData.directory_no_software.data, directoryTrackData.directory_no_software.loading, "directory_no_software", 4)}
-                </TabsContent>
-              </Tabs>
-            </TabsContent>
-          </Tabs>
 
           <div className="mt-6 p-4 bg-muted border border-border rounded-lg">
             <h3 className="font-semibold text-foreground mb-2">How Email Sequences Work</h3>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Choose a recipient and audience track explicitly; directory and existing sequence tracks remain separate</li>
+              <li>• Choose a recipient and audience track explicitly</li>
               <li>• Sequence 1 sends on your chosen date and time (Eastern Time)</li>
               <li>• Sequences 2-5 send automatically after specified days if no reply received</li>
               <li>• Use [Contact_Greeting] for an automatic personal or business-team greeting. Other placeholders: [Contact_First_Name], [Sales_Person], [Business_Name], and [City]</li>
@@ -442,10 +367,6 @@ export default function EmailSequences() {
                   ({selectedSequence.sequenceTrack
                     .replace("salon_", "Salon — ")
                     .replace("mobile_", "Mobile — ")
-                    .replace("directory_general", "Directory — General / Unknown")
-                    .replace("directory_has_software", "Directory — Has Software")
-                    .replace("directory_no_software", "Directory — No Software")
-                    .replace("competitor_moego", "MoeGo")
                     .replace("uses_competitor", "Uses Competitor - Any")
                     .replace("no_software", "No Software")
                     .replace("custom", "General")} Track)
@@ -481,10 +402,6 @@ export default function EmailSequences() {
                   {queueViewerSequence.sequenceTrack
                     .replace("salon_", "Salon — ")
                     .replace("mobile_", "Mobile — ")
-                    .replace("directory_general", "Directory — General / Unknown")
-                    .replace("directory_has_software", "Directory — Has Software")
-                    .replace("directory_no_software", "Directory — No Software")
-                    .replace("competitor_moego", "MoeGo")
                     .replace("uses_competitor", "Uses Competitor - Any")
                     .replace("no_software", "No Software")
                     .replace("custom", "General")}
@@ -526,7 +443,6 @@ export default function EmailSequences() {
 
             const allSequences = [
               ...Object.values(trackData).flatMap(t => t.data ?? []),
-              ...Object.values(directoryTrackData).flatMap(t => t.data ?? []),
             ];
 
             const getSubject = (log: EmailSequenceLog) => {

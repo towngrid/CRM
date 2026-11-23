@@ -139,7 +139,6 @@ export async function scheduleNextSequence(
   if (sentSequence.sequenceTrack.endsWith("_custom") || sentSequence.sequenceTrack === "custom") return;
 
   const nextNumber = sentSequence.sequenceNumber + 1;
-  if (sentSequence.strategy === "directory_first" && nextNumber > 4) return;
   if (nextNumber > 5) return;
   const [run] = await retainedRecipientEvidence([sentLog]);
 

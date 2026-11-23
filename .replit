@@ -47,8 +47,6 @@ waitForPort = 5000
 
 [userenv]
 
-[userenv.shared]
-SALON_RESEARCH_SYNC_URL = "https://esypet-crm.replit.app"
 
 [postMerge]
 path = "scripts/post-merge.sh"

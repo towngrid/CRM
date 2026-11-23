@@ -378,7 +378,6 @@ export function registerLeadWorkspaceRoutes(app: Express, auth: RequestHandler,
   });
   route("get", "/api/leads/rows/:rowId/sequences", async req => {
     const row = await ownedRow(req);
-    await storage.ensureDirectoryEmailSequences(row.userId);
     const sequences = (await storage.getEmailSequences(row.userId)).filter(sequence =>
       sequence.sequenceNumber === 1 && sequence.isActive === "true" && sequence.sequenceTrack.startsWith("directory_"));
     const contact = row.importedContactId ? await storage.getContact(row.importedContactId, row.userId) : undefined;

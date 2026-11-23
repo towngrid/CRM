@@ -225,7 +225,7 @@ export async function fetchPublicPage(
     const requestOptions = {
       deadlineAt,
       maxBytes: options.maxBytes ?? MAX_PAGE_BYTES,
-      userAgent: options.userAgent ?? "Mozilla/5.0 (compatible; EsyCRM salon website review/1.0)",
+      userAgent: options.userAgent ?? "Mozilla/5.0 (compatible; TownGridCRM salon website review/1.0)",
     };
     const pendingResponse = runtime.request
       ? runtime.request(current, addresses[0], { timeoutMs: remainingMs, maxBytes: requestOptions.maxBytes, userAgent: requestOptions.userAgent })

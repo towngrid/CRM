@@ -52,8 +52,8 @@ test("first-name tokens outside the opening salutation retain their existing mea
 });
 
 test("existing directory subjects use personal or team names for a mixed group", () => {
-  const subject = "[Contact_First_Name], are you listed on EsyPet's free grooming directory?";
-  const suffix = ", are you listed on EsyPet's free grooming directory?";
+  const subject = "[Contact_First_Name], are you on Google Maps yet?";
+  const suffix = ", are you on Google Maps yet?";
   assert.equal(render(subject), `Eliud${suffix}`);
   assert.equal(render(subject, { firstName: null }), `Curly Tails team${suffix}`);
   assert.equal(render(subject, { firstName: "Eliud", useBusinessNameForEmail: "Yes" }), `Curly Tails team${suffix}`);

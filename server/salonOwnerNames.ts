@@ -526,7 +526,7 @@ function requestPinnedPage(url: URL, address: { address: string; family: number 
       method: "GET",
       headers: {
         Host: url.host,
-        "User-Agent": "Mozilla/5.0 (compatible; EsyCRM owner-name review/1.0)",
+        "User-Agent": "Mozilla/5.0 (compatible; TownGridCRM owner-name review/1.0)",
         Accept: "text/html",
         Connection: "close",
       },

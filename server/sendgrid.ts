@@ -1,12 +1,13 @@
 import type { Contact, User, EmailSequence } from "@shared/schema";
+import { APP_NAME, getAppUrl } from "./appConfig";
 
 // Brevo (formerly Sendinblue) email service
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
 // Verified sender on Brevo
-const DEFAULT_FROM_EMAIL = "info@esypet.app";
-const DEFAULT_FROM_NAME = "EsyPet Solutions";
+const DEFAULT_FROM_EMAIL = "hello@towngrid.net";
+const DEFAULT_FROM_NAME = "TownGrid";
 
 if (BREVO_API_KEY) {
   console.log(`[Brevo] API key loaded. Length: ${BREVO_API_KEY.length}`);
@@ -204,8 +205,8 @@ export async function sendReplyNotificationEmail({
   const notifyEmail = salesperson.workEmail || salesperson.email;
   if (!notifyEmail) return;
 
-  const subject = "You have a EsyPet Response. Check INBOX";
-  const body = `Please check your EsyPet Inbox and reply to the lead.\n\nhttps://EsyPet-CRM.replit.app`;
+  const subject = `You have a reply in ${APP_NAME}. Check the Inbox`;
+  const body = `Please check your ${APP_NAME} Inbox and reply to the lead.\n\n${getAppUrl()}`;
 
   try {
     await sendEmail({

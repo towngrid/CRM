@@ -36,14 +36,10 @@ export function normalizeEmail(email: string | null | undefined): string | null 
 }
 
 /**
- * Return upfront and monthly commission amounts for a given plan name.
- * Upfront = 90% of monthly plan price, Monthly recurring = 10%.
+ * Upfront and monthly commission for a plan. TownGrid has no commission rules yet
+ * (no salespeople), so every plan pays 0 until Seann sets the rules.
  */
-export function getCommissionAmounts(planName: string | null | undefined): { upfront: number; monthly: number } {
-  if (!planName) return { upfront: 0, monthly: 0 };
-  if (planName.includes("Solo"))      return { upfront: 71.10,  monthly: 7.90  };
-  if (planName.includes("Salon"))     return { upfront: 134.10, monthly: 14.90 };
-  if (planName.includes("Signature")) return { upfront: 206.10, monthly: 22.90 };
+export function getCommissionAmounts(_planName: string | null | undefined): { upfront: number; monthly: number } {
   return { upfront: 0, monthly: 0 };
 }
 

@@ -12,100 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { insertContactSchema, type Contact, type InsertContact } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { DuplicateResolutionDialog } from "./duplicate-resolution-dialog";
-
-const BUILTIN_SOFTWARE = [
-  "DaySmart", "Gingr", "Groomer.io", "GrooMore", "GroomSoft",
-  "Kennel Connection", "MoeGo", "Pawfinity", "RevelationPet",
-  "Square", "TimeToPet",
-];
-
-const CUSTOM_SOFTWARE_KEY = "towngridcrm_custom_software";
-
-function getCustomSoftware(): string[] {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_SOFTWARE_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function saveCustomSoftware(list: string[]) {
-  localStorage.setItem(CUSTOM_SOFTWARE_KEY, JSON.stringify(list));
-}
-
-function buildSoftwareList(custom: string[]): string[] {
-  return [...new Set([...BUILTIN_SOFTWARE, ...custom])].sort((a, b) =>
-    a.localeCompare(b)
-  );
-}
-
-function SoftwareSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [customSoftware, setCustomSoftware] = useState<string[]>(() => {
-    const stored = getCustomSoftware();
-    // If the contact already has a value not in the built-in list, add it to custom
-    if (value && !BUILTIN_SOFTWARE.includes(value) && !stored.includes(value)) {
-      const updated = [...stored, value];
-      saveCustomSoftware(updated);
-      return updated;
-    }
-    return stored;
-  });
-  const [showOtherInput, setShowOtherInput] = useState(false);
-  const [otherText, setOtherText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const allOptions = buildSoftwareList(customSoftware);
-
-  const handleSelectChange = (val: string) => {
-    if (val === "__other__") {
-      setShowOtherInput(true);
-      setOtherText("");
-      setTimeout(() => inputRef.current?.focus(), 0);
-    } else {
-      setShowOtherInput(false);
-      onChange(val);
-    }
-  };
-
-  const commitOther = () => {
-    const trimmed = otherText.trim();
-    if (!trimmed) { setShowOtherInput(false); return; }
-    const updated = [...new Set([...customSoftware, trimmed])];
-    setCustomSoftware(updated);
-    saveCustomSoftware(updated);
-    onChange(trimmed);
-    setShowOtherInput(false);
-    setOtherText("");
-  };
-
-  const selectValue = showOtherInput
-    ? "__other__"
-    : (value || "");
-
-  return (
-    <div className="space-y-2">
-      <Select onValueChange={handleSelectChange} value={selectValue}>
-        <SelectTrigger data-testid="select-currentSoftware">
-          <SelectValue placeholder="Select software..." />
-        </SelectTrigger>
-        <SelectContent>
-          {allOptions.map((opt) => (
-            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-          ))}
-          <SelectItem value="__other__">Other (type a new name)</SelectItem>
-        </SelectContent>
-      </Select>
-      {showOtherInput && (
-        <Input
-          ref={inputRef}
-          value={otherText}
-          onChange={(e) => setOtherText(e.target.value)}
-          placeholder="Type software name and press Enter"
-          data-testid="input-otherSoftware"
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitOther(); } }}
-          onBlur={commitOther}
-        />
-      )}
-    </div>
-  );
-}
+import { LEAD_LISTS, leadTypesForList } from "@shared/leadTypes";
 
 interface ContactFormProps {
   contact?: Contact;
@@ -157,7 +64,8 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
       company: contact?.company || "",
       jobTitle: contact?.jobTitle || "",
       businessType: contact?.businessType || "salon",
-      usesSoftware: contact?.usesSoftware || "",
+      leadList: (contact?.leadList || "") as "get_seen" | "ordering" | "",
+      leadType: contact?.leadType || "",
       hasWebsite: contact?.hasWebsite || "",
       websiteUrl: contact?.websiteUrl || "",
       contactRequestFormUrl: contact?.contactRequestFormUrl || "",
@@ -166,8 +74,6 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
       secondaryFirstName: contact?.secondaryFirstName || "",
       secondaryLastName: contact?.secondaryLastName || "",
       leadSource: contact?.leadSource || "",
-      currentSoftware: contact?.currentSoftware || "",
-      bookingSoftwareUrl: contact?.bookingSoftwareUrl || "",
       numberOfEmployees: contact?.numberOfEmployees || undefined,
       numberOfLocations: contact?.numberOfLocations || undefined,
       painPoints: contact?.painPoints || "",
@@ -655,7 +561,7 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
                     <Input 
                       {...field} 
                       value={field.value || ""}
-                      placeholder="Software Engineer"
+                      placeholder="Owner"
                       data-testid="input-jobTitle"
                     />
                   </FormControl>
@@ -692,23 +598,27 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
 
           <FormField
             control={form.control}
-            name="usesSoftware"
+            name="leadList"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Uses Software *</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
+                <FormLabel>List</FormLabel>
+                <Select
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    const type = form.getValues("leadType");
+                    if (type && !leadTypesForList(v).some(t => t.value === type)) form.setValue("leadType", "");
+                  }}
                   value={field.value || ""}
                 >
                   <FormControl>
-                    <SelectTrigger data-testid="select-usesSoftware">
-                      <SelectValue placeholder="Select..." />
+                    <SelectTrigger data-testid="select-leadList">
+                      <SelectValue placeholder="Get Seen or Ordering..." />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                    <SelectItem value="Unknown">Unknown</SelectItem>
+                    {LEAD_LISTS.map(l => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -718,35 +628,22 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
 
           <FormField
             control={form.control}
-            name="currentSoftware"
+            name="leadType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Current Software Used</FormLabel>
-                <FormControl>
-                  <SoftwareSelect
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="bookingSoftwareUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Booking Software URL</FormLabel>
-                <FormControl>
-                  <Input 
-                    {...field} 
-                    value={field.value || ""}
-                    placeholder="e.g., https://app.example.com"
-                    data-testid="input-bookingSoftwareUrl"
-                  />
-                </FormControl>
+                <FormLabel>Lead type</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-leadType">
+                      <SelectValue placeholder="Select lead type..." />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {leadTypesForList(form.watch("leadList")).map(t => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
@@ -758,7 +655,7 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
               name="numberOfEmployees"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel># of Groomers / Employees</FormLabel>
+                  <FormLabel># of Employees</FormLabel>
                   <FormControl>
                     <Input 
                       {...field} 

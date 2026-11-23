@@ -31,10 +31,7 @@ function fmtAmt(val: string | number) {
 }
 
 function planBadgeClass(planName: string) {
-  if (planName.includes("Solo")) return "bg-emerald-100 text-emerald-700";
-  if (planName.includes("Salon")) return "bg-blue-100 text-blue-700";
-  if (planName.includes("Signature")) return "bg-purple-100 text-purple-700";
-  return "bg-gray-100 text-gray-700";
+  return planName ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700";
 }
 
 function exportCSV(period: PayrollPeriodFull) {
@@ -53,7 +50,7 @@ function exportCSV(period: PayrollPeriodFull) {
       item.contactName,
       item.dealTitle,
       item.planName,
-      item.type === "upfront" ? "New Sale (90%)" : "Recurring (10%)",
+      item.type === "upfront" ? "New Sale" : "Recurring",
       parseFloat(item.originalAmount).toFixed(2),
       parseFloat(item.adjustedAmount).toFixed(2),
       item.notes || "",
@@ -240,7 +237,7 @@ export default function PayrollDetail() {
             <CardContent className="p-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-sm font-medium text-green-700 dark:text-green-400">New Sales (90% Upfront)</p>
+                  <p className="text-sm font-medium text-green-700 dark:text-green-400">New Sales (Upfront)</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{upfrontItems.length} deal{upfrontItems.length !== 1 ? "s" : ""} won this period</p>
                 </div>
                 <p className="text-xl font-bold text-green-600">{fmtAmt(upfrontTotal)}</p>
@@ -294,7 +291,7 @@ export default function PayrollDetail() {
                       </TableCell>
                       <TableCell>
                         <Badge className={`text-xs ${item.type === "upfront" ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-blue-100 text-blue-700 hover:bg-blue-100"}`}>
-                          {item.type === "upfront" ? "New Sale (90%)" : "Recurring (10%)"}
+                          {item.type === "upfront" ? "New Sale" : "Recurring"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground text-sm">

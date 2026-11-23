@@ -13,7 +13,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { getContactDisplay } from "@/lib/contact-display";
 import { ToastAction } from "@/components/ui/toast";
 import { useLocation } from "wouter";
-import { DEAL_PLANS } from "@shared/dealPlans";
+import { useDealPlans } from "@/hooks/useDealPlans";
+import { DEAL_STAGES } from "@shared/dealStages";
 
 interface DealFormProps {
   deal?: Deal;
@@ -25,6 +26,7 @@ interface DealFormProps {
 
 export default function DealForm({ deal, initialContact, onSuccess, onCancel, onPendingChange }: DealFormProps) {
   const { toast } = useToast();
+  const dealPlanList = useDealPlans();
   const [, setLocation] = useLocation();
   
   const { data: contacts } = useQuery<Contact[]>({
@@ -193,9 +195,8 @@ export default function DealForm({ deal, initialContact, onSuccess, onCancel, on
                 <Select 
                   onValueChange={(value) => {
                     field.onChange(value);
-                    if (value.includes("Solo")) form.setValue("value", "79");
-                    else if (value.includes("Salon")) form.setValue("value", "149");
-                    else if (value.includes("Signature")) form.setValue("value", "229");
+                    const price = dealPlanList.priceFor(value);
+                    if (price != null) form.setValue("value", String(price));
                   }} 
                   defaultValue={field.value || ""}
                 >
@@ -205,7 +206,7 @@ export default function DealForm({ deal, initialContact, onSuccess, onCancel, on
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {DEAL_PLANS.map(plan => (
+                    {dealPlanList.choices(field.value).map(plan => (
                       <SelectItem key={plan} value={plan}>{plan}</SelectItem>
                     ))}
                   </SelectContent>
@@ -237,17 +238,9 @@ export default function DealForm({ deal, initialContact, onSuccess, onCancel, on
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="new_lead_unqualified">New Lead Unqualified</SelectItem>
-                    <SelectItem value="qualified_lead">Qualified Lead</SelectItem>
-                    <SelectItem value="contacted_emailed">Contacted - Emailed</SelectItem>
-                    <SelectItem value="contacted_phone_spoke_decision_maker">Contacted - Phone Spoke To Decision Maker</SelectItem>
-                    <SelectItem value="contacted_phone_spoke_non_decision_maker">Contacted - Phone Spoke To Non-Decision Maker</SelectItem>
-                    <SelectItem value="contacted_phone_left_message">Contacted - Phone Left Message</SelectItem>
-                    <SelectItem value="trial_period_started">Trial Period Started</SelectItem>
-                    <SelectItem value="pending_commitment">Pending Commitment</SelectItem>
-                    <SelectItem value="in_negotiation">In Negotiation</SelectItem>
-                    <SelectItem value="won">Won</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
+                    {DEAL_STAGES.map(s => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FormMessage />

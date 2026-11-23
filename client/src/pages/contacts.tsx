@@ -8,7 +8,8 @@ import DealForm from "@/components/deals/deal-form";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LEAD_LISTS, leadTypesForList } from "@shared/leadTypes";
 import { Download, Users, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -27,7 +28,7 @@ export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | undefined>();
   const [showArchived, setShowArchived] = useState(false);
-  const [usesSoftwareFilter, setUsesSoftwareFilter] = useState<"all" | "Yes" | "No" | "Unknown">("all");
+  const [leadTypeFilter, setLeadTypeFilter] = useState<string>("all");
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [deleteTargets, setDeleteTargets] = useState<Contact[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -51,7 +52,7 @@ export default function Contacts() {
     setSelectedContactIds(new Set());
     setDeleteTargets([]);
     setIsDeleteDialogOpen(false);
-  }, [searchQuery, usesSoftwareFilter, filterUserId, showArchived]);
+  }, [searchQuery, leadTypeFilter, filterUserId, showArchived]);
 
   const { data: adminUsers } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
@@ -282,8 +283,12 @@ export default function Contacts() {
     if (!contacts || !Array.isArray(contacts)) return [];
     let list = [...contacts];
 
-    if (usesSoftwareFilter !== "all") {
-      list = list.filter(c => c.usesSoftware === usesSoftwareFilter);
+    if (leadTypeFilter === "none") {
+      list = list.filter(c => !c.leadType);
+    } else if (leadTypeFilter.startsWith("list:")) {
+      list = list.filter(c => c.leadList === leadTypeFilter.slice(5));
+    } else if (leadTypeFilter !== "all") {
+      list = list.filter(c => c.leadType === leadTypeFilter);
     }
 
     if (sortColumn) {
@@ -317,7 +322,7 @@ export default function Contacts() {
     }
 
     return list;
-  }, [contacts, sortColumn, sortDir, usesSoftwareFilter]);
+  }, [contacts, sortColumn, sortDir, leadTypeFilter]);
 
   return (
     <>
@@ -377,22 +382,26 @@ export default function Contacts() {
       <main className="flex-1 min-h-0 overflow-auto p-6 bg-muted/30" data-testid="contacts-content">
         <p className="mb-4 text-sm text-muted-foreground">Contacts store reviewed business and person details. Find or upload new businesses in Leads, track sales opportunities in Pipeline, and confirm messages separately in Outreach.</p>
         <div className="flex items-center gap-3 mb-4">
-          <span className="text-sm font-medium text-muted-foreground">Uses Software:</span>
-          {(["all", "Yes", "No", "Unknown"] as const).map((val) => (
-            <button
-              key={val}
-              onClick={() => setUsesSoftwareFilter(val)}
-              data-testid={`filter-software-${val}`}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                usesSoftwareFilter === val
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-foreground border-border hover:border-primary hover:text-primary"
-              }`}
-            >
-              {val === "all" ? "All" : val === "Yes" ? "✓ Uses Software" : val === "No" ? "✗ No Software" : "? Unknown"}
-            </button>
-          ))}
-          {usesSoftwareFilter !== "all" && (
+          <span className="text-sm font-medium text-muted-foreground">Lead type:</span>
+          <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
+            <SelectTrigger className="w-72 bg-background" data-testid="filter-lead-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All contacts</SelectItem>
+              {LEAD_LISTS.map(l => (
+                <SelectGroup key={l.value}>
+                  <SelectLabel>{l.label} list</SelectLabel>
+                  <SelectItem value={`list:${l.value}`}>All {l.label}</SelectItem>
+                  {leadTypesForList(l.value).map(t => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+              <SelectItem value="none">No lead type yet</SelectItem>
+            </SelectContent>
+          </Select>
+          {leadTypeFilter !== "all" && (
             <span className="text-xs text-muted-foreground ml-1">
               ({sortedContacts.length} contact{sortedContacts.length !== 1 ? "s" : ""})
             </span>

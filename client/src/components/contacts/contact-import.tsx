@@ -10,6 +10,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle } from "luc
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Contact, InsertContact } from "@shared/schema";
+import { parseLeadList, parseLeadType } from "@shared/leadTypes";
 import { BulkDuplicateResolutionDialog } from "./bulk-duplicate-resolution-dialog";
 
 interface ImportResult {
@@ -185,9 +186,8 @@ export default function ContactImport({ open, onOpenChange }: ContactImportProps
           city,
           state,
           zipCode: zip,
-          usesSoftware: (row["Currently uses software"] || row.usesSoftware || row.uses_software || "").trim() || null,
-          currentSoftware: (row["Software Used"] || row.currentSoftware || row.current_software || "").trim() || null,
-          bookingSoftwareUrl: (row["Booking Software URL"] || row.bookingSoftwareUrl || row.booking_software_url || "").trim() || null,
+          leadList: parseLeadList(row.List || row.list || row.leadList || row.lead_list),
+          leadType: parseLeadType(row["Lead type"] || row["Lead Type"] || row.leadType || row.lead_type),
           hasWebsite: (row["Has Web Site"] || row.hasWebsite || row.has_website || "").trim() || null,
           websiteUrl: (row["Web Site Address"] || row.websiteUrl || row.website_url || "").trim() || null,
           contactRequestFormUrl: (row["Contact Request Form URL"] || row.contactRequestFormUrl || row.contact_request_form_url || "").trim() || null,

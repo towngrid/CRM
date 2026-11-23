@@ -18,6 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { Contact, EmailSequence, EmailSequenceLog } from "@shared/schema";
+import { leadTypeLabel } from "@shared/leadTypes";
 
 const QUICK_LINKS: { label: string; html: string; description?: string }[] = [
   { label: "Visit TownGrid", html: '<a href="https://towngrid.net/">Visit TownGrid</a>' },
@@ -512,30 +513,16 @@ function SequenceComposerDialog({ contact, open, onOpenChange, onSuccess }: Comp
             <Separator />
 
             <div className="space-y-2">
-              {contact.usesSoftware && (
+              {contact.leadType && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Software</p>
-                  <Badge variant="outline" className={`text-xs ${
-                    contact.usesSoftware === "Yes"
-                      ? "border-orange-300 text-orange-600"
-                      : contact.usesSoftware === "No"
-                        ? "border-green-300 text-green-600"
-                        : "border-muted text-muted-foreground"
-                  }`}>
-                    {contact.usesSoftware === "Yes" ? "Uses Software" : contact.usesSoftware === "No" ? "No Software" : "Unknown"}
-                  </Badge>
+                  <p className="text-xs text-muted-foreground mb-1">Lead type</p>
+                  <Badge variant="outline" className="text-xs">{leadTypeLabel(contact.leadType)}</Badge>
                 </div>
               )}
               {contact.interestLevel && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Interest</p>
                   <Badge variant="outline" className="text-xs">{contact.interestLevel}</Badge>
-                </div>
-              )}
-              {contact.currentSoftware && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Current Software</p>
-                  <p className="text-xs font-medium">{contact.currentSoftware}</p>
                 </div>
               )}
             </div>

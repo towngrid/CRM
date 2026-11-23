@@ -45,7 +45,10 @@ import { isRetryableStagedSalonRow, MAX_SALON_LIST_JSON_BYTES, MAX_SALON_LIST_RO
 import { registerSalonResearchRoutes } from "./salonResearch";
 import { rejectResearchExecution, isResearchDirectoryRow, RESEARCH_READ_ONLY } from "./salonResearchPolicy";
 import { pipelineEmailQueryScope } from "./pipelineEmailSummary";
+import { registerDealPlanRoutes, seedDealPlans } from "./dealPlanRoutes";
 import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE } from "./appConfig";
+import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
+import { DEAL_STAGE_VALUES, stageLabel } from "@shared/dealStages";
 
 // ─── Sequence Test Runner (in-memory) ────────────────────────────────────────
 interface TestStepResult {
@@ -173,6 +176,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerLeadWorkspaceRoutes(app, isAuthenticated);
   registerContactOwnerNameRoutes(app, isAuthenticated);
   registerSalonResearchRoutes(app, isAuthenticated, isAdmin);
+  await seedDealPlans();
+  registerDealPlanRoutes(app, isAuthenticated, isAdmin);
 
   // Helper function to get user ID or null for admin (admin sees all data)
   const getUserIdForQuery = (user: any): string | null => {
@@ -1542,20 +1547,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const actorName = actor ? `${actor.firstName ?? ""} ${actor.lastName ?? ""}`.trim() || actor.email || actorId : actorId;
         const contact = deal.contactId ? await storage.getContact(deal.contactId, null) : null;
         const contactName = contact ? `${contact.firstName} ${contact.lastName}` : "N/A";
-        const stageLabelMap: Record<string, string> = {
-          qualified_lead: "Qualified Lead",
-          contacted_emailed: "Contacted - Emailed",
-          contacted_phone_spoke_decision_maker: "Contacted - Phone Spoke To Decision Maker",
-          contacted_phone_spoke_non_decision_maker: "Contacted - Phone Spoke To Non-Decision Maker",
-          contacted_phone_left_message: "Contacted - Phone Left Message",
-          trial_period_started: "Trial Period Started",
-          pending_commitment: "Pending Commitment",
-          in_negotiation: "In Negotiation",
-          won: "Won",
-          lost: "Lost",
-        };
-        const newLabel = stageLabelMap[dealData.stage] ?? dealData.stage;
-        const oldLabel = stageLabelMap[beforeDeal.stage] ?? beforeDeal.stage;
+        const newLabel = stageLabel(dealData.stage);
+        const oldLabel = stageLabel(beforeDeal.stage);
         const adminEmails = getAdminAlertEmails();
         const subject = `${APP_NAME} — Deal Stage Updated: ${deal.title}`;
         const textBody = [
@@ -1865,7 +1858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserIdForQuery(req.user);
       const deals = await storage.getDeals(userId);
-      const stages = ["new_lead_unqualified", "qualified_lead", "contacted_emailed", "contacted_phone_spoke_decision_maker", "contacted_phone_spoke_non_decision_maker", "contacted_phone_left_message", "trial_period_started", "pending_commitment", "in_negotiation", "won", "lost"];
+      const stages = DEAL_STAGE_VALUES;
       
       const pipeline = stages.map(stage => {
         const stageDeals = deals.filter(deal => deal.stage === stage);
@@ -2113,7 +2106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const periodLabel = `${startFmt} – ${endFmt}`;
 
       const lineRows = period.items.map((item) => {
-        const typeLabel = item.type === "upfront" ? "New Sale (90%)" : "Recurring (10%)";
+        const typeLabel = item.type === "upfront" ? "New Sale" : "Recurring";
         const typeBg = item.type === "upfront" ? "#dcfce7" : "#dbeafe";
         const typeColor = item.type === "upfront" ? "#166534" : "#1d4ed8";
         const adj = parseFloat(item.adjustedAmount).toFixed(2);
@@ -2510,9 +2503,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phone: contact.phone,
         company: contact.company,
         jobTitle: contact.jobTitle,
-        "Currently uses software": contact.usesSoftware,
-        "Software Used": contact.currentSoftware,
-        "Booking Software URL": contact.bookingSoftwareUrl,
+        "List": leadListLabel(contact.leadList),
+        "Lead type": leadTypeLabel(contact.leadType),
         "Has Web Site": contact.hasWebsite,
         "Web Site Address": contact.websiteUrl,
         "Contact Request Form URL": contact.contactRequestFormUrl,

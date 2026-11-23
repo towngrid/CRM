@@ -16,6 +16,8 @@ import { Edit, Mail, Phone, Users, Building, MapPin, Globe, User, Briefcase, Fil
 import type { Contact, Deal, User as UserType } from "@shared/schema";
 import { getContactDisplay } from "@/lib/contact-display";
 import { contactDeletionLabel } from "@/lib/contact-deletion";
+import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
+import { stageLabel, stagePillClass } from "@shared/dealStages";
 
 interface ContactListProps {
   contacts: Contact[];
@@ -42,37 +44,11 @@ interface ContactListProps {
 }
 
 const getStageLabel = (stage: string) => {
-  switch (stage) {
-    case "new_lead_unqualified": return "New Lead Unqualified";
-    case "qualified_lead": return "Qualified Lead";
-    case "contacted_emailed": return "Contacted - Emailed";
-    case "contacted_phone_spoke_decision_maker": return "Contacted - Phone Spoke To Decision Maker";
-    case "contacted_phone_spoke_non_decision_maker": return "Contacted - Phone Spoke To Non-Decision Maker";
-    case "contacted_phone_left_message": return "Contacted - Phone Left Message";
-    case "trial_period_started": return "Trial Period Started";
-    case "pending_commitment": return "Pending Commitment";
-    case "in_negotiation": return "In Negotiation";
-    case "won": return "Won";
-    case "lost": return "Lost";
-    default: return stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  }
+  return stageLabel(stage);
 };
 
 const getStageColor = (stage: string) => {
-  switch (stage) {
-    case "new_lead_unqualified": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
-    case "qualified_lead": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
-    case "contacted_emailed": return "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300";
-    case "contacted_phone_spoke_decision_maker": return "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300";
-    case "contacted_phone_spoke_non_decision_maker": return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
-    case "contacted_phone_left_message": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
-    case "trial_period_started": return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300";
-    case "pending_commitment": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
-    case "in_negotiation": return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300";
-    case "won": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300";
-    case "lost": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-    default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
-  }
+  return stagePillClass(stage);
 };
 
 function SortIcon({ col, sortColumn, sortDir }: { col: "name" | "company" | "lastContact"; sortColumn: "name" | "company" | "lastContact" | null; sortDir: "asc" | "desc" }) {
@@ -501,11 +477,10 @@ export default function ContactList({ contacts, deals, isLoading, isAdmin, admin
                         Business Information
                       </h4>
                       <InfoRow label="Company" value={viewContact.company} icon={<Building className="h-3.5 w-3.5" />} />
-                      <InfoRow label="Uses Software" value={viewContact.usesSoftware} />
-                      <InfoRow label="Current Software" value={viewContact.currentSoftware} />
+                      <InfoRow label="List" value={viewContact.leadList ? leadListLabel(viewContact.leadList) : null} />
+                      <InfoRow label="Lead type" value={viewContact.leadType ? leadTypeLabel(viewContact.leadType) : null} />
                       <InfoRow label="Has Website" value={viewContact.hasWebsite} />
                       <InfoRow label="Website URL" value={viewContact.websiteUrl} icon={<Globe className="h-3.5 w-3.5" />} />
-                      <InfoRow label="Booking Software URL" value={viewContact.bookingSoftwareUrl} icon={<Globe className="h-3.5 w-3.5" />} />
                       <InfoRow label="Number of Employees" value={viewContact.numberOfEmployees} />
                       <InfoRow label="Number of Locations" value={viewContact.numberOfLocations} />
                     </div>

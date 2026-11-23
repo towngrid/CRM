@@ -32,27 +32,17 @@ import {
 } from "@/components/ui/select";
 import type { Deal, Contact } from "@shared/schema";
 import { getCommissionAmounts } from "@shared/utils";
-import { DEAL_PLANS } from "@shared/dealPlans";
+import { useDealPlans } from "@/hooks/useDealPlans";
 import { pipelineContactOwnerName } from "@shared/pipelineContactName";
 import ContactForm from "@/components/contacts/contact-form";
 import ContactOwnerNameSearch from "@/components/contacts/contact-owner-name-search";
 import DealTaskPanel from "@/components/tasks/deal-task-panel";
 import DealSequencePanel from "@/components/email-sequences/deal-sequence-panel";
+import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
+import { DEAL_STAGES, stageDotClass, stagePillClass } from "@shared/dealStages";
 
 // ─── Stage helpers ────────────────────────────────────────────────────────────
-const STAGES: { value: string; label: string; color: string; bg: string }[] = [
-  { value: "new_lead_unqualified",                     label: "New Lead Unqualified",                       color: "text-gray-700 dark:text-gray-300",   bg: "bg-gray-100 dark:bg-gray-800" },
-  { value: "qualified_lead",                           label: "Qualified Lead",                             color: "text-blue-700 dark:text-blue-300",   bg: "bg-blue-100 dark:bg-blue-900" },
-  { value: "contacted_emailed",                        label: "Contacted - Emailed",                        color: "text-sky-700 dark:text-sky-300",     bg: "bg-sky-100 dark:bg-sky-900" },
-  { value: "contacted_phone_spoke_decision_maker",     label: "Contacted - Phone Spoke To Decision Maker",  color: "text-teal-700 dark:text-teal-300",   bg: "bg-teal-100 dark:bg-teal-900" },
-  { value: "contacted_phone_spoke_non_decision_maker", label: "Contacted - Phone Spoke To Non-Decision Maker", color: "text-cyan-700 dark:text-cyan-300", bg: "bg-cyan-100 dark:bg-cyan-900" },
-  { value: "contacted_phone_left_message",             label: "Contacted - Phone Left Message",             color: "text-yellow-700 dark:text-yellow-300", bg: "bg-yellow-100 dark:bg-yellow-900" },
-  { value: "trial_period_started",                     label: "Trial Period Started",                       color: "text-indigo-700 dark:text-indigo-300", bg: "bg-indigo-100 dark:bg-indigo-900" },
-  { value: "pending_commitment",                       label: "Pending Commitment",                         color: "text-purple-700 dark:text-purple-300", bg: "bg-purple-100 dark:bg-purple-900" },
-  { value: "in_negotiation",                           label: "In Negotiation",                             color: "text-orange-700 dark:text-orange-300", bg: "bg-orange-100 dark:bg-orange-900" },
-  { value: "won",                                      label: "Won",                                        color: "text-green-700 dark:text-green-300", bg: "bg-green-100 dark:bg-green-900" },
-  { value: "lost",                                     label: "Lost",                                       color: "text-red-700 dark:text-red-300",     bg: "bg-red-100 dark:bg-red-900" },
-];
+const STAGES = DEAL_STAGES;
 
 function stageInfo(value: string) {
   return STAGES.find(s => s.value === value) ?? STAGES[0];
@@ -61,18 +51,14 @@ function stageInfo(value: string) {
 function StagePill({ stage }: { stage: string }) {
   const s = stageInfo(stage);
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.color}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${stagePillClass(s.value)}`}>
       {s.label}
     </span>
   );
 }
 
 // ─── Plan helpers ─────────────────────────────────────────────────────────────
-const PLAN_COLORS: Record<string, string> = {
-  "Solo - $79/mo or $2 / Appoint":  "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
-  "Salon - $149/mo or $3 / Appoint": "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  "Signature - $229/mo":             "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-};
+const PLAN_PILL = "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
 
 // ─── Contact info row ─────────────────────────────────────────────────────────
 function InfoRow({ icon, label, value, link }: { icon: React.ReactNode; label: string; value?: string | null; link?: string }) {
@@ -121,6 +107,7 @@ export default function DealWorkspace() {
   const [, params] = useRoute("/deal/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const dealPlanList = useDealPlans();
   const { user } = useAuth();
   const dealId = params?.id ?? "";
   const returnToPipeline = () => {
@@ -375,7 +362,7 @@ export default function DealWorkspace() {
                 className={s.value === deal.stage ? "opacity-50 cursor-default" : ""}
                 data-testid={`menu-stage-${s.value}`}
               >
-                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${s.bg}`} />
+                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${stageDotClass(s.value)}`} />
                 {s.label}
               </DropdownMenuItem>
             ))}
@@ -425,20 +412,10 @@ export default function DealWorkspace() {
                   {contact.company && (
                     <p className="text-sm text-muted-foreground" data-testid="text-contact-company">{contact.company}</p>
                   )}
-                  {/* Uses Software badge */}
-                  {contact.usesSoftware === "Yes" && (
-                    <Badge className="mt-1.5 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs">
-                      Uses Software
-                    </Badge>
-                  )}
-                  {contact.usesSoftware === "No" && (
-                    <Badge className="mt-1.5 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-xs">
-                      No Software
-                    </Badge>
-                  )}
-                  {contact.usesSoftware === "Unknown" && (
-                    <Badge className="mt-1.5 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 text-xs">
-                      Software Unknown
+                  {/* Lead type badge */}
+                  {contact.leadType && (
+                    <Badge className="mt-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs" data-testid="badge-lead-type">
+                      {leadTypeLabel(contact.leadType)}
                     </Badge>
                   )}
                   {/* Interest Level */}
@@ -469,20 +446,10 @@ export default function DealWorkspace() {
                 <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label="# of Locations" value={contact.numberOfLocations?.toString()} />
                 <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="# of Employees" value={contact.numberOfEmployees?.toString()} />
 
-                {/* Software Info */}
-                <SectionHeader>Software</SectionHeader>
-                <div className="py-1.5">
-                  <p className="text-xs text-muted-foreground mb-1">Uses Software</p>
-                  <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${
-                    contact.usesSoftware === "Yes"     ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
-                    contact.usesSoftware === "No"      ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
-                    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                  }`}>
-                    {contact.usesSoftware ?? "Unknown"}
-                  </span>
-                </div>
-                <InfoRow icon={<Monitor className="h-3.5 w-3.5" />} label="Current Software" value={contact.currentSoftware} />
-                <InfoRow icon={<Link2 className="h-3.5 w-3.5" />} label="Booking URL" value={contact.bookingSoftwareUrl} link={contact.bookingSoftwareUrl ?? undefined} />
+                {/* TownGrid list and lead type */}
+                <SectionHeader>Lead</SectionHeader>
+                <InfoRow icon={<Monitor className="h-3.5 w-3.5" />} label="List" value={contact.leadList ? leadListLabel(contact.leadList) : "Not set"} />
+                <InfoRow icon={<Monitor className="h-3.5 w-3.5" />} label="Lead type" value={contact.leadType ? leadTypeLabel(contact.leadType) : "Not set"} />
 
                 {/* Digital Presence */}
                 <SectionHeader>Digital Presence</SectionHeader>
@@ -767,7 +734,7 @@ export default function DealWorkspace() {
                         <UiSelectValue placeholder="Select plan…" />
                       </UiSelectTrigger>
                       <UiSelectContent>
-                        {DEAL_PLANS.map(plan => (
+                        {dealPlanList.choices(deal.plan).map(plan => (
                           <UiSelectItem key={plan} value={plan}>{plan}</UiSelectItem>
                         ))}
                       </UiSelectContent>
@@ -796,7 +763,7 @@ export default function DealWorkspace() {
                 ) : (
                   <div>
                     {deal.plan ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PLAN_COLORS[deal.plan] ?? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"}`} data-testid="text-deal-plan">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PLAN_PILL}`} data-testid="text-deal-plan">
                         {deal.plan}
                       </span>
                     ) : (
@@ -1021,7 +988,7 @@ export default function DealWorkspace() {
                   <UiSelectValue placeholder="Select plan…" />
                 </UiSelectTrigger>
                 <UiSelectContent>
-                  {DEAL_PLANS.map(plan => (
+                  {dealPlanList.choices(deal.plan).map(plan => (
                     <UiSelectItem key={plan} value={plan}>{plan}</UiSelectItem>
                   ))}
                 </UiSelectContent>
@@ -1029,15 +996,16 @@ export default function DealWorkspace() {
             </div>
             {wonPlanChoice && (() => {
               const { upfront, monthly } = getCommissionAmounts(wonPlanChoice);
+              if (upfront === 0 && monthly === 0) return null;
               return (
                 <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-4 space-y-1">
                   <p className="text-sm font-semibold text-green-800 dark:text-green-300">Commission Breakdown</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Upfront (90%)</span>
+                    <span className="text-muted-foreground">Upfront</span>
                     <span className="font-bold text-green-700 dark:text-green-400">${upfront.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Monthly recurring (10%)</span>
+                    <span className="text-muted-foreground">Monthly recurring</span>
                     <span className="font-semibold text-green-700 dark:text-green-400">${monthly.toFixed(2)}/mo</span>
                   </div>
                 </div>
@@ -1054,7 +1022,7 @@ export default function DealWorkspace() {
               disabled={!wonPlanChoice || commissionMutation.isPending}
               data-testid="button-confirm-won"
             >
-              {commissionMutation.isPending ? "Saving…" : "Confirm & Record Commission"}
+              {commissionMutation.isPending ? "Saving…" : "Mark as Won"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -51,17 +51,10 @@ type PayrollPeriodFull = {
   }>;
 };
 
-const PLAN_BADGE_CLASS: Record<string, string> = {
-  Solo: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
-  Salon: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  Signature: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-};
-
 function planBadgeClass(planName: string) {
-  for (const k of Object.keys(PLAN_BADGE_CLASS)) {
-    if (planName.includes(k)) return PLAN_BADGE_CLASS[k];
-  }
-  return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
+  return planName
+    ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+    : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
 }
 
 function fmtAmt(val: string | number) {
@@ -253,8 +246,8 @@ export default function Commissions() {
                     </div>
                   </div>
                   <div className="mt-4 space-y-1 text-xs text-muted-foreground">
-                    <div className="flex justify-between"><span>Upfront (one-time 90%)</span><span className="font-medium">{fmtAmt(totalUpfront)}</span></div>
-                    <div className="flex justify-between"><span>Monthly accumulated (10%)</span><span className="font-medium text-blue-600">+{fmtAmt(totalMonthlyAccum)}</span></div>
+                    <div className="flex justify-between"><span>Upfront (one-time)</span><span className="font-medium">{fmtAmt(totalUpfront)}</span></div>
+                    <div className="flex justify-between"><span>Monthly accumulated</span><span className="font-medium text-blue-600">+{fmtAmt(totalMonthlyAccum)}</span></div>
                   </div>
                 </CardContent>
               </Card>
@@ -270,7 +263,7 @@ export default function Commissions() {
                       <RefreshCw className="h-6 w-6 text-blue-600" />
                     </div>
                   </div>
-                  <div className="mt-4 text-sm text-muted-foreground">Added every 30 days per active deal (10%)</div>
+                  <div className="mt-4 text-sm text-muted-foreground">Added every 30 days per active deal</div>
                 </CardContent>
               </Card>
 
@@ -295,7 +288,7 @@ export default function Commissions() {
               <Card data-testid="commission-details-table">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> Commission Details</CardTitle>
-                  <p className="text-sm text-muted-foreground">Won deals — 90% upfront on close, then 10% added every 30 days</p>
+                  <p className="text-sm text-muted-foreground">Won deals — upfront on close, then a monthly amount every 30 days</p>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -305,8 +298,8 @@ export default function Commissions() {
                         {isAdmin && <TableHead>Salesperson</TableHead>}
                         <TableHead>Plan</TableHead>
                         <TableHead>Won Date</TableHead>
-                        <TableHead className="text-right">Upfront (90%)</TableHead>
-                        <TableHead className="text-right">Rate/mo (10%)</TableHead>
+                        <TableHead className="text-right">Upfront</TableHead>
+                        <TableHead className="text-right">Rate/mo</TableHead>
                         <TableHead className="text-right">Months Paid</TableHead>
                         <TableHead className="text-right">Total Earned</TableHead>
                       </TableRow>
@@ -427,7 +420,7 @@ export default function Commissions() {
                                   </TableCell>
                                   <TableCell>
                                     <Badge variant={item.type === "upfront" ? "default" : "secondary"} className={item.type === "upfront" ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-blue-100 text-blue-700 hover:bg-blue-100"}>
-                                      {item.type === "upfront" ? "New Sale (90%)" : "Recurring (10%)"}
+                                      {item.type === "upfront" ? "New Sale" : "Recurring"}
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="text-right text-muted-foreground text-sm">{fmtAmt(item.originalAmount)}</TableCell>

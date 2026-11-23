@@ -2,6 +2,7 @@ import { storage } from "./storage";
 import { sendEmail } from "./sendgrid";
 
 import { APP_NAME, getAdminAlertEmails } from "./appConfig";
+import { stageShortLabel } from "@shared/dealStages";
 
 const TIMEZONE = "America/New_York";
 
@@ -56,23 +57,8 @@ function todayLabel(): string {
   }).format(new Date());
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  new_lead_unqualified:                  "New Lead Unqualified",
-  qualified_lead:                        "Qualified Lead",
-  contacted_emailed:                     "Contacted — Emailed",
-  contacted_phone_spoke_decision_maker:  "Spoke w/ Decision Maker",
-  contacted_phone_spoke_non_decision_maker: "Spoke w/ Non-Decision Maker",
-  contacted_phone_left_message:          "Left Message",
-  trial_period_started:                  "Trial Period Started",
-  pending_commitment:                    "Pending Commitment",
-  in_negotiation:                        "In Negotiation",
-  won:                                   "Won",
-  lost:                                  "Lost",
-};
-
 function stageLabel(stage: string | null | undefined): string {
-  if (!stage) return "—";
-  return STAGE_LABELS[stage] ?? stage;
+  return stageShortLabel(stage);
 }
 
 function contactDisplay(c: { firstName?: string | null; lastName?: string | null; company?: string | null; city?: string | null }): string {

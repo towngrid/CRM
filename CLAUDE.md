@@ -22,12 +22,18 @@ A private sales tool for TownGrid, built from a copy of ESyCRM. It finds local b
 
 ## Status
 - Step 0 (clean-up): done Nov 22, 2026, waiting for Seann's check. Step 0.1 (Neon password, Replit secrets) done by Seann.
-  Left for later steps: the salon research code still uses the internal tag `directory_general` and the salon/mobile "software" tracks (replaced in Steps 2, 3 and 6); `docs/new-salesperson-setup.md`, `replit.md` and `design_guidelines.md` still describe ESyCRM.
+  Left for later steps: the salon research code still uses the internal tag `directory_general` and the salon/mobile "software" tracks (replaced in Steps 3 and 6).
 - Step 1 (Nov 22, 2026): code done and pushed (emailed-code sign-in in `server/auth.ts`, node-postgres driver, `ENABLE_OUTREACH_SENDING` switch: only exactly "on" sends). Railway: Postgres service "Postgres" (CRM only) and empty service "crm" created in project TownGrid, domain crm-production-59a974cd.up.railway.app (port 8080), build `npm run build`, pre-deploy `npm run db:push`, start `npm start`. Source: `towngrid/CRM`, branch `towngrid` (pushes to it redeploy the CRM). Variables set by Seann. First deploy Nov 23, 2026 04:27 UTC: tables created, admin account created, scheduler off, Brevo account is TownGrid's. **Step 1 done and checked: Seann signed in with an emailed code.** Step 2 waits for his OK. Never touch "marketing-engine".
+- Step 2 (Nov 23, 2026): code done, waiting for Seann's check.
+  - Plans live in table `deal_plans`, edited by admins in Settings → Plans & prices (`server/dealPlanRoutes.ts`, `shared/dealPlans.ts`; defaults only fill an empty table). Deals save the plan label text. Add-ons are separate picker choices (one plan per deal).
+  - Commission rules: `getCommissionAmounts` returns 0 for every plan; Commissions/Payroll hidden from the menu (pages and routes kept).
+  - Pipeline stages: one list in `shared/dealStages.ts` (12 stages, `site_visit_booked` after Left Message). Don't copy stage lists into screens again.
+  - Lists and lead types: `shared/leadTypes.ts`; contacts have `lead_list` and `lead_type`. "Uses Software" is gone from contact/deal screens, filters, import and export; the `uses_software`, `current_software` and `booking_software_url` columns stay in the database unused.
+  - Still left for Step 3: research code (lead-discovery, salon enrichment) and the contact "Business Type" (salon/mobile). Step 6: sequence tracks still chosen from `usesSoftware` (routes, storage, Seq Test page).
+  - Old guides deleted; `docs/adding-a-user.md` replaces the onboarding guide.
 - The admin account seann@towngrid.net is created automatically when the users table is empty.
 - `db:push` runs on every deploy; later schema changes that drizzle-kit would ask about (renames, drops) may stall it. Check the pre-deploy log when changing `shared/schema.ts`.
-- Known: 20 of 41 test files fail (same 20 as on `main`; Step 1 added `server/outreachSwitch.test.ts`, which passes). `npx tsc` and `npm run build` pass.
+- Known: 20 of 41 test files fail (same 20 as on `main`; `server/outreachSwitch.test.ts` and the rewritten `shared/dealPlans.test.ts` pass). `npx tsc` and `npm run build` pass.
 
 ## To-do (agreed with Seann)
 - Before Step 3: fix or remove the 20 test files that already fail on `main`.
-- In Step 2: update or delete the three old ESyCRM guides (`docs/new-salesperson-setup.md`, `replit.md`, `design_guidelines.md`).

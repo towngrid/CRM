@@ -14,7 +14,7 @@ import {
   Handshake, 
   CheckSquare, 
   TrendingUp,
-  DollarSign,
+
   Mail,
   Inbox as InboxIcon,
   Settings as SettingsIcon,
@@ -36,7 +36,7 @@ const navigation = [
   { name: "Tasks",           href: "/tasks",              icon: CheckSquare },
   { name: "Outreach",        href: "/email-sequences",     icon: Mail },
   { name: "Inbox",           href: "/inbox",              icon: InboxIcon },
-  { name: "Commissions",     href: "/commissions",        icon: DollarSign },
+  // Commissions and Payroll are hidden until TownGrid has salespeople (pages still exist).
   { name: "Reports",         href: "/reports",            icon: TrendingUp },
   { name: "Settings",        href: "/settings",           icon: SettingsIcon },
 ];

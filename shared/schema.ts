@@ -55,7 +55,9 @@ export const contacts = pgTable("contacts", {
   zipCode: text("zip_code"),
   company: text("company"),
   jobTitle: text("job_title"),
-  usesSoftware: text("uses_software"), // Yes, No, Unknown
+  usesSoftware: text("uses_software"), // ESyCRM leftover, no longer shown; kept so old data isn't dropped
+  leadList: text("lead_list"), // get_seen, ordering (shared/leadTypes.ts)
+  leadType: text("lead_type"), // shared/leadTypes.ts
   hasWebsite: text("has_website"), // Yes, No, Unknown
   websiteUrl: text("website_url"),
   contactRequestFormUrl: text("contact_request_form_url"),
@@ -85,7 +87,7 @@ export const deals = pgTable("deals", {
   contactId: varchar("contact_id").references(() => contacts.id),
   value: decimal("value", { precision: 10, scale: 2 }),
   plan: text("plan"), // Solo - $79/mo or $2 / Appoint, Salon - $149/mo or $3 / Appoint, Signature - $229/mo
-  stage: text("stage").notNull().default("new_lead_unqualified"), // new_lead_unqualified, qualified_lead, contacted_emailed, contacted_phone_spoke_decision_maker, contacted_phone_spoke_non_decision_maker, contacted_phone_left_message, trial_period_started, pending_commitment, in_negotiation, won, lost
+  stage: text("stage").notNull().default("new_lead_unqualified"), // values: shared/dealStages.ts
   stageChangedAt: timestamp("stage_changed_at"),
   probability: integer("probability").default(0), // 0-100
   expectedCloseDate: timestamp("expected_close_date"),
@@ -244,7 +246,8 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 }).extend({
   firstName: z.string().optional().nullable(),
   lastName: z.string().optional().nullable(),
-  usesSoftware: z.string().min(1, "Uses Software is required"),
+  leadList: z.enum(["get_seen", "ordering", ""]).optional().nullable(),
+  leadType: z.string().max(60).optional().nullable(),
   useBusinessNameForEmail: z.string().optional().nullable(),
 });
 
@@ -695,3 +698,16 @@ export const loginCodes = pgTable(
 );
 
 export type LoginCode = typeof loginCodes.$inferSelect;
+
+// TownGrid plans and add-ons, edited by an admin in Settings (see shared/dealPlans.ts).
+export const dealPlans = pgTable("deal_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  billing: text("billing").notNull().default("monthly"), // monthly, one_time, none
+  kind: text("kind").notNull().default("plan"), // plan, add_on
+  note: text("note"),
+  active: text("active").notNull().default("true"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});

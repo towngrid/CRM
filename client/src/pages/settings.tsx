@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { PlansEditor } from "@/components/settings/plans-editor";
 
 const profileSchema = z.object({
   firstName: z.string().optional(),
@@ -23,6 +25,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 export default function Settings() {
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
 
   const { data: user, isLoading } = useQuery<{
     id: string;
@@ -218,6 +221,8 @@ export default function Settings() {
             </Form>
           </CardContent>
         </Card>
+
+        {authUser?.role === "admin" && <PlansEditor />}
       </div>
     </div>
   );

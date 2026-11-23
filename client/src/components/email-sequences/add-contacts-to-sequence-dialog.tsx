@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Mail, Users, Search, Plus, FolderOpen, CalendarClock, Pencil } from "lucide-react";
+import { leadTypeLabel } from "@shared/leadTypes";
 import type { EmailSequence, Contact, ContactGroup } from "@shared/schema";
 
 interface AddContactsToSequenceDialogProps {
@@ -21,13 +22,14 @@ interface AddContactsToSequenceDialogProps {
 }
 
 type GroupMode = "new" | "existing" | "none";
-type SoftwareFilter = "all" | "yes" | "no" | "unknown";
+type SoftwareFilter = "all" | "get_seen" | "ordering" | "unknown";
 
+// Filter by TownGrid list (Get Seen / Ordering).
 const SOFTWARE_FILTERS: { value: SoftwareFilter; label: string }[] = [
-  { value: "all",     label: "All" },
-  { value: "yes",     label: "✓ Uses Software" },
-  { value: "no",      label: "✗ No Software" },
-  { value: "unknown", label: "? Unknown" },
+  { value: "all",      label: "All" },
+  { value: "get_seen", label: "Get Seen" },
+  { value: "ordering", label: "Ordering" },
+  { value: "unknown",  label: "No list yet" },
 ];
 
 const PLACEHOLDERS_HELP = "[Contact_Greeting] (automatic personal/team greeting), [Contact_First_Name], [Sales_Person], [Business_Name], [City]";
@@ -72,9 +74,9 @@ export default function AddContactsToSequenceDialog({
     if (!allContacts) return [];
     let list = allContacts;
 
-    if (softwareFilter === "yes")     list = list.filter(c => c.usesSoftware === "Yes");
-    if (softwareFilter === "no")      list = list.filter(c => c.usesSoftware === "No");
-    if (softwareFilter === "unknown") list = list.filter(c => !c.usesSoftware || c.usesSoftware === "Unknown");
+    if (softwareFilter === "get_seen") list = list.filter(c => c.leadList === "get_seen");
+    if (softwareFilter === "ordering") list = list.filter(c => c.leadList === "ordering");
+    if (softwareFilter === "unknown")  list = list.filter(c => !c.leadList);
 
     const q = search.trim().toLowerCase();
     if (q) {
@@ -88,12 +90,12 @@ export default function AddContactsToSequenceDialog({
   }, [allContacts, search, softwareFilter]);
 
   const softwareCounts = useMemo(() => {
-    if (!allContacts) return { all: 0, yes: 0, no: 0, unknown: 0 };
+    if (!allContacts) return { all: 0, get_seen: 0, ordering: 0, unknown: 0 };
     return {
-      all:     allContacts.length,
-      yes:     allContacts.filter(c => c.usesSoftware === "Yes").length,
-      no:      allContacts.filter(c => c.usesSoftware === "No").length,
-      unknown: allContacts.filter(c => !c.usesSoftware || c.usesSoftware === "Unknown").length,
+      all:      allContacts.length,
+      get_seen: allContacts.filter(c => c.leadList === "get_seen").length,
+      ordering: allContacts.filter(c => c.leadList === "ordering").length,
+      unknown:  allContacts.filter(c => !c.leadList).length,
     };
   }, [allContacts]);
 
@@ -510,19 +512,9 @@ export default function AddContactsToSequenceDialog({
                             {contact.company && ` · ${contact.company}`}
                           </div>
                         </div>
-                        {contact.usesSoftware === "Yes" && (
-                          <Badge variant="outline" className="text-xs shrink-0 text-orange-600 border-orange-300">
-                            ✓ Has Software
-                          </Badge>
-                        )}
-                        {contact.usesSoftware === "No" && (
-                          <Badge variant="outline" className="text-xs shrink-0 text-green-600 border-green-300">
-                            ✗ No Software
-                          </Badge>
-                        )}
-                        {(!contact.usesSoftware || contact.usesSoftware === "Unknown") && (
-                          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
-                            ? Unknown
+                        {contact.leadType && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            {leadTypeLabel(contact.leadType)}
                           </Badge>
                         )}
                       </div>

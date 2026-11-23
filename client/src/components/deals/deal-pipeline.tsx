@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { stageDotClass, stageLabel } from "@shared/dealStages";
 
 interface PipelineStage {
   stage: string;
@@ -23,37 +24,11 @@ export default function DealPipeline() {
   };
 
   const getStageColor = (stage: string) => {
-    switch (stage) {
-      case "new_lead_unqualified": return "bg-gray-400";
-      case "qualified_lead": return "bg-blue-500";
-      case "contacted_emailed": return "bg-sky-500";
-      case "contacted_phone_spoke_decision_maker": return "bg-teal-500";
-      case "contacted_phone_spoke_non_decision_maker": return "bg-cyan-500";
-      case "contacted_phone_left_message": return "bg-yellow-500";
-      case "trial_period_started": return "bg-indigo-500";
-      case "pending_commitment": return "bg-purple-500";
-      case "in_negotiation": return "bg-orange-500";
-      case "won": return "bg-emerald-500";
-      case "lost": return "bg-red-500";
-      default: return "bg-muted";
-    }
+    return stageDotClass(stage);
   };
 
   const getStageLabel = (stage: string) => {
-    switch (stage) {
-      case "new_lead_unqualified": return "New Lead Unqualified";
-      case "qualified_lead": return "Qualified Lead";
-      case "contacted_emailed": return "Contacted - Emailed";
-      case "contacted_phone_spoke_decision_maker": return "Contacted - Phone Spoke To Decision Maker";
-      case "contacted_phone_spoke_non_decision_maker": return "Contacted - Phone Spoke To Non-Decision Maker";
-      case "contacted_phone_left_message": return "Contacted - Phone Left Message";
-      case "trial_period_started": return "Trial Period Started";
-      case "pending_commitment": return "Pending Commitment";
-      case "in_negotiation": return "In Negotiation";
-      case "won": return "Won";
-      case "lost": return "Lost";
-      default: return stage;
-    }
+    return stageLabel(stage);
   };
 
   return (

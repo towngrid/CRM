@@ -19,10 +19,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import type { Deal, Contact, User, EmailSequenceLog, EmailSequence, InboxMessage } from "@shared/schema";
 import { getCommissionAmounts } from "@shared/utils";
-import { DEAL_PLANS } from "@shared/dealPlans";
+import { useDealPlans } from "@/hooks/useDealPlans";
 import { matchesPipelineEmailFilters, pipelineSequenceLabels } from "@shared/pipelineEmailSummary";
 import type { PipelineEmailSummaries } from "@shared/pipelineEmailSummary";
 import PipelineEmailStatus from "@/components/deals/pipeline-email-status";
+import { DEAL_STAGES, stageLabel, stagePillClass } from "@shared/dealStages";
 
 type ViewType = "card" | "table";
 type SortColumn = "title" | "value" | "expectedCloseDate" | "stage" | "contact" | "probability";
@@ -32,6 +33,7 @@ export default function Deals() {
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
   const { toast } = useToast();
+  const dealPlanList = useDealPlans();
   const [, setLocation] = useLocation();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -252,20 +254,7 @@ export default function Deals() {
   };
 
   const getStageLabel = (stage: string) => {
-    switch (stage) {
-      case "new_lead_unqualified": return "New Lead Unqualified";
-      case "qualified_lead": return "Qualified Lead";
-      case "contacted_emailed": return "Contacted - Emailed";
-      case "contacted_phone_spoke_decision_maker": return "Contacted - Phone Spoke To Decision Maker";
-      case "contacted_phone_spoke_non_decision_maker": return "Contacted - Phone Spoke To Non-Decision Maker";
-      case "contacted_phone_left_message": return "Contacted - Phone Left Message";
-      case "trial_period_started": return "Trial Period Started";
-      case "pending_commitment": return "Pending Commitment";
-      case "in_negotiation": return "In Negotiation";
-      case "won": return "Won";
-      case "lost": return "Lost";
-      default: return stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    }
+    return stageLabel(stage);
   };
 
   const handleStageChange = (dealId: string, newStage: string) => {
@@ -280,20 +269,7 @@ export default function Deals() {
   };
 
   const getStageColor = (stage: string) => {
-    switch (stage) {
-      case "new_lead_unqualified": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
-      case "qualified_lead": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
-      case "contacted_emailed": return "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300";
-      case "contacted_phone_spoke_decision_maker": return "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300";
-      case "contacted_phone_spoke_non_decision_maker": return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
-      case "contacted_phone_left_message": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
-      case "trial_period_started": return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300";
-      case "pending_commitment": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
-      case "in_negotiation": return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300";
-      case "won": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300";
-      case "lost": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
-    }
+    return stagePillClass(stage);
   };
 
   const formatCurrency = (amount: string | null) => {
@@ -793,17 +769,9 @@ export default function Deals() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="new_lead_unqualified">New Lead Unqualified</SelectItem>
-                          <SelectItem value="qualified_lead">Qualified Lead</SelectItem>
-                          <SelectItem value="contacted_emailed">Contacted - Emailed</SelectItem>
-                          <SelectItem value="contacted_phone_spoke_decision_maker">Contacted - Phone Spoke To Decision Maker</SelectItem>
-                          <SelectItem value="contacted_phone_spoke_non_decision_maker">Contacted - Phone Spoke To Non-Decision Maker</SelectItem>
-                          <SelectItem value="contacted_phone_left_message">Contacted - Phone Left Message</SelectItem>
-                          <SelectItem value="trial_period_started">Trial Period Started</SelectItem>
-                          <SelectItem value="pending_commitment">Pending Commitment</SelectItem>
-                          <SelectItem value="in_negotiation">In Negotiation</SelectItem>
-                          <SelectItem value="won">Won</SelectItem>
-                          <SelectItem value="lost">Lost</SelectItem>
+                          {DEAL_STAGES.map(s => (
+                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -997,17 +965,9 @@ export default function Deals() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="new_lead_unqualified">New Lead Unqualified</SelectItem>
-                            <SelectItem value="qualified_lead">Qualified Lead</SelectItem>
-                            <SelectItem value="contacted_emailed">Contacted - Emailed</SelectItem>
-                            <SelectItem value="contacted_phone_spoke_decision_maker">Contacted - Phone Spoke To Decision Maker</SelectItem>
-                            <SelectItem value="contacted_phone_spoke_non_decision_maker">Contacted - Phone Spoke To Non-Decision Maker</SelectItem>
-                            <SelectItem value="contacted_phone_left_message">Contacted - Phone Left Message</SelectItem>
-                            <SelectItem value="trial_period_started">Trial Period Started</SelectItem>
-                            <SelectItem value="pending_commitment">Pending Commitment</SelectItem>
-                            <SelectItem value="in_negotiation">In Negotiation</SelectItem>
-                            <SelectItem value="won">Won</SelectItem>
-                            <SelectItem value="lost">Lost</SelectItem>
+                            {DEAL_STAGES.map(s => (
+                              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -1371,7 +1331,7 @@ export default function Deals() {
                   <SelectValue placeholder="Select plan…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {DEAL_PLANS.map(plan => (
+                  {dealPlanList.choices().map(plan => (
                     <SelectItem key={plan} value={plan}>{plan}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1379,15 +1339,16 @@ export default function Deals() {
             </div>
             {wonPlanChoice && (() => {
               const { upfront, monthly } = getCommissionAmounts(wonPlanChoice);
+              if (upfront === 0 && monthly === 0) return null;
               return (
                 <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-4 space-y-1">
                   <p className="text-sm font-semibold text-green-800 dark:text-green-300">Commission Breakdown</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Upfront (90%)</span>
+                    <span className="text-muted-foreground">Upfront</span>
                     <span className="font-bold text-green-700 dark:text-green-400">${upfront.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Monthly recurring (10%)</span>
+                    <span className="text-muted-foreground">Monthly recurring</span>
                     <span className="font-semibold text-green-700 dark:text-green-400">${monthly.toFixed(2)}/mo</span>
                   </div>
                 </div>
@@ -1404,7 +1365,7 @@ export default function Deals() {
               disabled={!wonPlanChoice || commissionMutation.isPending}
               data-testid="button-confirm-won-deals"
             >
-              {commissionMutation.isPending ? "Saving…" : "Confirm & Record Commission"}
+              {commissionMutation.isPending ? "Saving…" : "Mark as Won"}
             </Button>
           </DialogFooter>
         </DialogContent>

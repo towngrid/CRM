@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { sendEmail } from "./sendgrid";
+import { getAppUrl } from "./appConfig";
 
 async function processTaskReminders() {
   try {
@@ -21,7 +22,7 @@ async function processTaskReminders() {
         ? new Date(task.dueDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
         : "No due date";
       const dueTimeStr = task.dueTime || "";
-      const dealLink = `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ""}/deal/${task.dealId}`;
+      const dealLink = `${getAppUrl()}/deal/${task.dealId}`;
 
       const typeLabels: Record<string, string> = {
         call: "📞 Call",

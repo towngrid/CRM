@@ -1,7 +1,8 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 function redirectToLogin() {
-  window.location.href = "/api/login";
+  // The sign-in screen lives at "/". Avoid a reload loop when already there.
+  if (window.location.pathname !== "/") window.location.href = "/";
 }
 
 async function throwIfResNotOk(res: Response) {

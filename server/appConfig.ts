@@ -23,3 +23,18 @@ export function getAppUrl(): string {
   const railway = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
   return railway ? `https://${railway}` : "";
 }
+
+/** The one admin account created when the users table is empty. */
+export const OWNER_EMAIL = "seann@towngrid.net";
+
+/**
+ * Cold outreach (email sequences) only sends when the Railway variable
+ * ENABLE_OUTREACH_SENDING is exactly "on". Missing, "off" or anything else = off.
+ * Sign-in codes and admin alerts are not outreach and are not affected.
+ */
+export function isOutreachSendingEnabled(): boolean {
+  return (process.env.ENABLE_OUTREACH_SENDING ?? "").trim().toLowerCase() === "on";
+}
+
+export const OUTREACH_OFF_MESSAGE =
+  "Outreach sending is off (ENABLE_OUTREACH_SENDING is not \"on\"). Nothing was sent.";

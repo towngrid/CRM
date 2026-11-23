@@ -677,3 +677,21 @@ export type PayrollLineItem = typeof payrollLineItems.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
+
+// Emailed sign-in codes. Only a hash of the code is stored; each code works once
+// and expires after 10 minutes (see server/auth.ts).
+export const loginCodes = pgTable(
+  "login_codes",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    email: varchar("email").notNull(),
+    codeHash: varchar("code_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("IDX_login_codes_email").on(table.email)],
+);
+
+export type LoginCode = typeof loginCodes.$inferSelect;

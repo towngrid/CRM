@@ -1,5 +1,5 @@
 import type { Contact, User, EmailSequence } from "@shared/schema";
-import { APP_NAME, getAppUrl } from "./appConfig";
+import { APP_NAME, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE } from "./appConfig";
 
 // Brevo (formerly Sendinblue) email service
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
@@ -171,6 +171,11 @@ export async function sendSequenceEmail({
   customSubject?: string | null;
   customBody?: string | null;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  // Hard stop: cold outreach never sends while the switch is off.
+  if (!isOutreachSendingEnabled()) {
+    console.warn(`[Outreach] Blocked sequence email to contact ${contact.id}: sending is off.`);
+    return { success: false, error: OUTREACH_OFF_MESSAGE };
+  }
   if (!contact.email) {
     return { success: false, error: "Contact has no email address" };
   }

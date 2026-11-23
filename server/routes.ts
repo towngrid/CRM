@@ -2,7 +2,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { SalonOwnerNameStorageConflict, storage } from "./storage";
-import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAdmin } from "./auth";
 import { insertContactSchema, insertContactGroupSchema, insertDealSchema, insertTaskSchema, insertEmailSequenceSchema, insertLeadDiscoveryJobSchema, insertCommissionSchema, insertSalonEnrichmentBatchSchema, insertSalonEnrichmentRowSchema, type InsertContact } from "@shared/schema";
 import { ContactDeletionConflict } from "./contactDeletion";
 import { createDealForActor, DealCreationError } from "./dealCreation";
@@ -45,7 +45,7 @@ import { isRetryableStagedSalonRow, MAX_SALON_LIST_JSON_BYTES, MAX_SALON_LIST_RO
 import { registerSalonResearchRoutes } from "./salonResearch";
 import { rejectResearchExecution, isResearchDirectoryRow, RESEARCH_READ_ONLY } from "./salonResearchPolicy";
 import { pipelineEmailQueryScope } from "./pipelineEmailSummary";
-import { APP_NAME, getAdminAlertEmails, getAppUrl } from "./appConfig";
+import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE } from "./appConfig";
 
 // ─── Sequence Test Runner (in-memory) ────────────────────────────────────────
 interface TestStepResult {
@@ -167,7 +167,7 @@ async function runSequenceTest(run: TestRun): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup auth middleware - From Replit Auth blueprint
+  // Emailed-code sign-in (server/auth.ts)
   await setupAuth(app);
   registerDirectoryEligibilityRoutes(app, isAuthenticated);
   registerLeadWorkspaceRoutes(app, isAuthenticated);
@@ -3934,6 +3934,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── Admin Sequence Test Routes ───────────────────────────────────────────
   app.post("/api/admin/sequence-test/start", isAdmin, async (req: any, res) => {
+    if (!isOutreachSendingEnabled()) {
+      return res.status(403).json({ message: OUTREACH_OFF_MESSAGE });
+    }
     try {
       const schema = z.object({
         contactId: z.string().min(1),

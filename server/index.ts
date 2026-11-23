@@ -7,12 +7,22 @@ import { startCommissionScheduler } from "./commissionScheduler";
 import { startDailyReportScheduler } from "./dailyReportScheduler";
 import { startSalonResearchSynchronization } from "./salonResearch";
 import { startFullResearchScheduler } from "./fullResearchQueue";
+import { isOutreachSendingEnabled } from "./appConfig";
 
 const app = express();
 // Uploaded enrichment batches can contain the full source row for thousands of
 // businesses. Keep the limit bounded, but large enough for the supported list.
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: false }));
+
+// Private tool: keep every page out of search engines.
+app.use((_req, res, next) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send(["User-agent: *", "Disallow: /", ""].join("\n"));
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -78,12 +88,12 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     
-    // Start email sequence scheduler if Brevo is configured
-    if (app.get("env") === "production" && process.env.BREVO_API_KEY) {
+    // Email sequence scheduler: only when ENABLE_OUTREACH_SENDING is "on".
+    if (app.get("env") === "production" && isOutreachSendingEnabled()) {
       log("Starting email sequence scheduler...");
       startEmailSequenceScheduler();
     } else {
-      log("Email sequence scheduler disabled (BREVO_API_KEY not set)");
+      log('Email sequence scheduler off (ENABLE_OUTREACH_SENDING is not "on")');
     }
 
     // Start task reminder scheduler (always runs, checks every 15 min)

@@ -8,6 +8,7 @@ import { salonEmailHtmlContextRestriction, salonEmailDomainRestriction } from ".
 import { directoryEligibility, isBookingOrOrderingUrl, providerCategories, withDirectoryNotes } from "@shared/directoryEligibility";
 import { readSerpProviderResponse } from "./serpProviderResponse";
 import { sharedSerpStopMessage } from "@shared/serpBudget";
+import { getSerpApiKey } from "./appConfig";
 
 // New reduced query set for budget management
 const DEFAULT_QUERIES = [
@@ -256,9 +257,9 @@ export async function searchWithSerpApi(
   queryTemplate: string,
   options?: { placeId?: string; beforeProviderRequest?: () => void | Promise<void>; requestPolicy?: SerpRequestPolicy },
 ): Promise<{ results: SerpApiResult[]; fromCache: boolean }> {
-  const apiKey = process.env.SERPAPI_API_KEY;
+  const apiKey = getSerpApiKey();
   if (!apiKey) {
-    throw new Error("SERPAPI_API_KEY not configured");
+    throw new Error("SERPAPI_KEY not configured");
   }
 
   // Check cache first (30-day caching)
@@ -1006,7 +1007,7 @@ const CONTACT_DETAIL_SOURCES: ContactDetailSource[] = [
 async function findContactDetailsFromAlternativeSources(
   businessName: string,
 ): Promise<{ email?: string; emailSource?: string; phone?: string; phoneSource?: string }> {
-  const serpKey = process.env.SERPAPI_API_KEY;
+  const serpKey = getSerpApiKey();
   if (!serpKey) return {};
 
   console.log(`[Discovery] Gap-fill: searching ${CONTACT_DETAIL_SOURCES.length} sources for "${businessName}"`);

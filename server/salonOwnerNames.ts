@@ -21,6 +21,7 @@ import { getSerpUsageStatus } from "./lead-discovery";
 import { ownerDiscoveryLocation, ownerInterviewDiscoveryText, prioritizeOwnerResults } from "./salonOwnerDiscovery";
 import { mentionsOwnerBusiness } from "@shared/salonOwnerDiscoveryRelevance";
 import { parseOwnerSearchResponse, readOwnerSearchCache, type OwnerSearchResult } from "./salonOwnerSearchResults";
+import { getSerpApiKey } from "./appConfig";
 
 const MAX_ROWS_PER_REQUEST = 5;
 const MAX_PAGES_PER_ROW = 4;
@@ -832,8 +833,8 @@ async function organicSearch(
   }
   if (remainingCalls <= 0) return { results: [], calls: 0, budgetExhausted: true, error: "Owner lookup incomplete: the confirmed paid-search allowance has been reached" };
   if (Date.now() >= deadline) return { results: [], calls: 0, error: "Owner lookup incomplete: the lookup time limit has been reached" };
-  const apiKey = process.env.SERPAPI_API_KEY;
-  if (!apiKey) return { results: [], calls: 0, error: "SERPAPI_API_KEY is not configured" };
+  const apiKey = getSerpApiKey();
+  if (!apiKey) return { results: [], calls: 0, error: "SERPAPI_KEY is not configured" };
 
   const status = await runtime.getUsageStatus();
   const maxCallsPerHour = providerHourlyLimit(status.config.maxSerpCallsPerHour ?? 5, progress.requestPolicy);
@@ -1317,7 +1318,7 @@ export async function estimateSalonOwnerNameSearch(rows: SalonEnrichmentRow[], s
   const misses = await Promise.all(uniquePhrases.map(async ({ cacheKey, zip, state }) => {
     return !(await runtime.storage.getSerpCache(zip, cacheKey, state, 30));
   }));
-  const keyConfigured = !!process.env.SERPAPI_API_KEY;
+  const keyConfigured = !!getSerpApiKey();
   const status = await runtime.getUsageStatus();
   const callsLastHour = await runtime.storage.getSerpCallsInLastHour();
   const monthlyRemaining = Math.max(0, Math.min(
@@ -1335,7 +1336,7 @@ export async function estimateSalonOwnerNameSearch(rows: SalonEnrichmentRow[], s
   const allowed = !!(misses.some(miss => !miss) || maxProviderCalls > 0 || hasWebsite);
   const reason = allowed
     ? undefined
-    : !keyConfigured ? "No matched website is available and SERPAPI_API_KEY is not configured"
+    : !keyConfigured ? "No matched website is available and SERPAPI_KEY is not configured"
       : remainingCredits <= 0 ? "Monthly or hourly SERP credits are exhausted"
         : "No owner-name searches are available";
   return {

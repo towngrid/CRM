@@ -24,6 +24,11 @@ export function getAppUrl(): string {
   return railway ? `https://${railway}` : "";
 }
 
+/** TownGrid's own SerpAPI key, from the Railway variable SERPAPI_KEY. Never logged or shown. */
+export function getSerpApiKey(): string | undefined {
+  return process.env.SERPAPI_KEY?.trim() || undefined;
+}
+
 /** The one admin account created when the users table is empty. */
 export const OWNER_EMAIL = "seann@towngrid.net";
 

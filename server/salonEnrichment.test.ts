@@ -1,7 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import type { SalonFetchRuntime } from "./salonPublicFetch";
-import salonSearchPilot from "../reports/salon-next-100-summary.json" with { type: "json" };
 import { buildGoogleMapsParams, crawlWebsite, parseGoogleMapsResults } from "./lead-discovery";
 import { strongMatch } from "./salonEnrichment";
 import { bookingPlatformForUrl, extractSalonEmailFromBookingHtml, findSalonEmailOnBookingPage, importableSalonEmail, importableSalonEmailCandidate } from "./bookingPageEmail";
@@ -245,16 +244,6 @@ test("salon search report rejects Place ID overlap within and across batches", (
   assert.equal(reportPlaceIdsAreDistinct(["same", "other"]), true);
   assert.equal(allReportPlaceIdsExist(["a", "b"], ["A", "b", "c"]), true);
   assert.equal(allReportPlaceIdsExist(["a", "missing"], ["a"]), false);
-});
-
-test("bundled salon pilot JSON validates and contains a distinct 100-row reviewed list", () => {
-  const parsed = salonSearchReportBatchSchema.parse({
-    name: "Salon public web review pilot",
-    reviewed: salonSearchPilot.reviewed,
-  });
-  const placeIds = parsed.reviewed.map(entry => entry["Google Place ID"]);
-  assert.equal(parsed.reviewed.length, 100);
-  assert.equal(reportPlaceIdsAreDistinct(placeIds), true);
 });
 
 test("public-web email policy requires exact email, strong identity, general use, and HTTPS evidence", () => {

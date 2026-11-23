@@ -121,8 +121,8 @@ test("transactional address reservations cover concurrent owners, sends, edits, 
     const methods = ["getContact", "getEmailSequence", "getSalonReportSendRejection",
       "getInboxMessages", "getEmailSequenceLogs", "getEmailSequencesByTrack"];
     const originals = Object.fromEntries(methods.map(method=>[method,crm[method]]));
-    const template = (step: number) => ({id:`template-${step}`,userId:"legacyOwner",strategy:"directory_first",
-      sequenceTrack:"directory_general",sequenceNumber:step,isActive:"true",daysAfterNoReply:7});
+    const template = (step: number) => ({id:`template-${step}`,userId:"legacyOwner",strategy:"no_software",
+      sequenceTrack:"salon_no_software",sequenceNumber:step,isActive:"true",daysAfterNoReply:7});
     try {
       crm.getContact=async(id:string)=>memory.contacts.find(c=>c.id===id);
       crm.getEmailSequence=async()=>template(1);
@@ -146,7 +146,7 @@ test("transactional address reservations cover concurrent owners, sends, edits, 
 
       // A completed older run's step 2 and reply must not suppress this new run's step 2.
       memory.email_sequence_logs.push({id:"old-step-2",contactId:"legacy",userId:"legacyOwner",
-        status:"sent",sequenceNumber:2,sequenceTrack:"directory_general",sequenceId:"template-2"});
+        status:"sent",sequenceNumber:2,sequenceTrack:"salon_no_software",sequenceId:"template-2"});
       crm.getInboxMessages=async()=>[{receivedAt:new Date("2020-01-01")}];
       crm.getEmailSequenceLogs=async()=>memory.email_sequence_logs.filter(l=>l.contactId==="legacy");
       crm.getEmailSequencesByTrack=async()=>[template(2),template(3)];

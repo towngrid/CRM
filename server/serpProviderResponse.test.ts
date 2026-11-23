@@ -54,7 +54,7 @@ test("backoff increases, respects Retry-After and rolling hourly allowances, and
   assert.equal(providerRateLimitWait(run, now).status, "paused");
   run.providerRateLimitCount = 0;
   assert.equal(Date.parse(providerRateLimitWait(run, now, 90 * 60000).nextRunAt!) - now, 90 * 60000);
-  run.attempts = Array.from({ length: 40 }, () => ({ at: new Date(now).toISOString(), rowId: "row", tool: "fixture" }));
+  run.attempts = Array.from({ length: run.limits.paidCallsPerHour }, () => ({ at: new Date(now).toISOString(), rowId: "row", tool: "fixture" }));
   assert.equal(Date.parse(providerRateLimitWait(run, now).nextRunAt!) - now, 3600000);
   run.attempts = [];
   run.startedRows = Array.from({ length: 20 }, () => ({ at: new Date(now).toISOString(), id: "row" }));

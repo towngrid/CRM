@@ -409,8 +409,8 @@ test("directory, changed email, social and purpose-restricted evidence never see
 
 test("provider body timeout is bounded, clear and counted once without automatic retry", async () => {
   const row = orchestrationRow({ websiteUrl: null });
-  const oldKey = process.env.SERPAPI_API_KEY;
-  process.env.SERPAPI_API_KEY = "test-only-key";
+  const oldKey = process.env.SERPAPI_KEY;
+  process.env.SERPAPI_KEY = "test-only-key";
   let signal: AbortSignal | undefined;
   const deps = mockDependencies(row, {
     providerTimeoutMs: 20,
@@ -433,8 +433,8 @@ test("provider body timeout is bounded, clear and counted once without automatic
     assert.equal(deps.observed.releases, 0);
   } finally {
     deps.restore();
-    if (oldKey === undefined) delete process.env.SERPAPI_API_KEY;
-    else process.env.SERPAPI_API_KEY = oldKey;
+    if (oldKey === undefined) delete process.env.SERPAPI_KEY;
+    else process.env.SERPAPI_KEY = oldKey;
   }
 });
 
@@ -534,8 +534,8 @@ test("explicit non-grooming categories are excluded before cache, usage, or netw
 
 test("quota-zero lookup attempts no paid request and provider timeout is counted conservatively", async () => {
   const row = orchestrationRow({ websiteUrl: null });
-  const oldKey = process.env.SERPAPI_API_KEY;
-  process.env.SERPAPI_API_KEY = "test-only-key";
+  const oldKey = process.env.SERPAPI_KEY;
+  process.env.SERPAPI_KEY = "test-only-key";
   try {
     const zeroQuota = mockDependencies(row, {
       usage: { config: { maxSerpCallsPerHour: 0 }, usage: { monthlyQuota: 0, usedCredits: 0, hardStopAt: 0 } },
@@ -569,15 +569,15 @@ test("quota-zero lookup attempts no paid request and provider timeout is counted
       timeoutDeps.restore();
     }
   } finally {
-    if (oldKey === undefined) delete process.env.SERPAPI_API_KEY;
-    else process.env.SERPAPI_API_KEY = oldKey;
+    if (oldKey === undefined) delete process.env.SERPAPI_KEY;
+    else process.env.SERPAPI_KEY = oldKey;
   }
 });
 
 test("provider calls remain counted when first persistence fails and retry succeeds", async () => {
   const row = orchestrationRow({ websiteUrl: null });
-  const oldKey = process.env.SERPAPI_API_KEY;
-  process.env.SERPAPI_API_KEY = "test-only-key";
+  const oldKey = process.env.SERPAPI_KEY;
+  process.env.SERPAPI_KEY = "test-only-key";
   const deps = mockDependencies(row, {
     completeFailures: 1,
     fetchProvider: async () => new Response(JSON.stringify({ organic_results: [] }), {
@@ -596,8 +596,8 @@ test("provider calls remain counted when first persistence fails and retry succe
     assert.equal(deps.observed.persisted?.providerCalls, 1);
   } finally {
     deps.restore();
-    if (oldKey === undefined) delete process.env.SERPAPI_API_KEY;
-    else process.env.SERPAPI_API_KEY = oldKey;
+    if (oldKey === undefined) delete process.env.SERPAPI_KEY;
+    else process.env.SERPAPI_KEY = oldKey;
   }
 });
 
@@ -843,11 +843,11 @@ test("a fetched first-person interview without the street address surfaces a can
   } finally { deps.restore(); }
 });
 async function withTestProvider(fn: () => Promise<void>) {
-  const oldKey = process.env.SERPAPI_API_KEY;
-  process.env.SERPAPI_API_KEY = "test-only-key";
+  const oldKey = process.env.SERPAPI_KEY;
+  process.env.SERPAPI_KEY = "test-only-key";
   try { await fn(); } finally {
-    if (oldKey === undefined) delete process.env.SERPAPI_API_KEY;
-    else process.env.SERPAPI_API_KEY = oldKey;
+    if (oldKey === undefined) delete process.env.SERPAPI_KEY;
+    else process.env.SERPAPI_KEY = oldKey;
   }
 }
 

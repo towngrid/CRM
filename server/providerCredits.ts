@@ -1,9 +1,10 @@
+import { getSerpApiKey } from "./appConfig";
 import type { ProviderCredits } from "@shared/providerCredits";
 
 /** Account metadata is not a search. Cache failures too, and coalesce concurrent checks. */
 export function createProviderCreditsReader(
   fetcher: typeof fetch = fetch,
-  apiKey: () => string | undefined = () => process.env.SERPAPI_API_KEY,
+  apiKey: () => string | undefined = () => getSerpApiKey(),
   now: () => number = Date.now,
 ) {
   let cached: ProviderCredits | undefined;

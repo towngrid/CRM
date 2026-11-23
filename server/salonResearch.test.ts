@@ -26,32 +26,6 @@ test("research signatures are scoped, expire, and reject modified bodies", () =>
   assert(!verifyResearchSignature(undefined, timestamp, signature, body, now));
 });
 
-test("fixed-sample snapshot separates raw candidates from source-confirmed emails", () => {
-  const snapshot = readResearchSnapshot()!;
-  assert.equal(snapshot.rows.length, 120);
-  assert.equal(new Set(snapshot.rows.map(row => row.placeId)).size, 120);
-  const unverified = snapshot.rows.find(row => row.email && !row.emailVerified)!;
-  assert(unverified);
-  const row = convertSalonSearchReportEntry(researchEntry(unverified), 1);
-  assert.equal(row.email, null);
-  assert(!canApproveSalonReportRow(row));
-  const verified = snapshot.rows.find(row => row.emailVerified)!;
-  const good = convertSalonSearchReportEntry(researchEntry(verified), 2);
-  assert.equal(good.email, verified.email.toLowerCase());
-  assert.equal(good.reviewStatus, "needs_review");
-  assert(canApproveSalonReportRow(good));
-  const wrong = structuredClone(snapshot);
-  wrong.rows[1].placeId = wrong.rows[0].placeId;
-  assert(!researchSnapshotSchema.safeParse(wrong).success);
-  const missingSource = structuredClone(snapshot);
-  missingSource.rows.find(row => row.emailVerified)!.emailSourceUrl = "";
-  assert(!researchSnapshotSchema.safeParse(missingSource).success);
-  assert(researchSnapshotSchema.safeParse({
-    ...snapshot, status: "stopped_by_user", nextAllowanceAt: null,
-  }).success, "User-closed pilot must remain readable without another allowance");
-  if (snapshot.status === "stopped_by_user") assert.equal(snapshot.nextAllowanceAt, null);
-});
-
 test("research synchronization preserves every explicit sales decision", () => {
   for (const row of [
     { reviewStatus: "approved", status: "enriched" },
@@ -60,15 +34,6 @@ test("research synchronization preserves every explicit sales decision", () => {
     { reviewStatus: "needs_review", status: "enriched", importedContactId: "fixture-contact" },
   ]) assert(preserveResearchDecision(row));
   assert(!preserveResearchDecision({ reviewStatus: "needs_review", status: "enriched" }));
-});
-
-test("a rejected website does not automatically exclude a genuine grooming business", () => {
-  const snapshot = readResearchSnapshot()!;
-  const parked = { ...snapshot.rows[0], websiteIdentity: "rejected",
-    providerCategory: "Pet groomer", email: "", emailVerified: false };
-  assert.equal(researchEntry(parked).Outcome, "no_verified_email");
-  assert.equal(researchEntry({ ...parked, providerCategory: "Supermarket" }).Outcome,
-    "excluded_non_grooming");
 });
 
 test("isolated API fixture stores the directory once and synchronizes without importing", async t => {

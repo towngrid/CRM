@@ -46,7 +46,7 @@ import { registerSalonResearchRoutes } from "./salonResearch";
 import { rejectResearchExecution, isResearchDirectoryRow, RESEARCH_READ_ONLY } from "./salonResearchPolicy";
 import { pipelineEmailQueryScope } from "./pipelineEmailSummary";
 import { registerDealPlanRoutes, seedDealPlans } from "./dealPlanRoutes";
-import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE } from "./appConfig";
+import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE, getSerpApiKey } from "./appConfig";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
 import { DEAL_STAGE_VALUES, stageLabel } from "@shared/dealStages";
 
@@ -532,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!businessName) return res.json({ found: false, reason: "No business name on record", steps: [] });
 
       const city = (contact as any).city || "";
-      const serpKey = process.env.SERPAPI_API_KEY;
+      const serpKey = getSerpApiKey();
       const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
       console.log(`[OwnerDiscovery] Starting search for "${businessName}"${city ? ` in ${city}` : ""}`);
@@ -653,7 +653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       async function collectGoogle(): Promise<void> {
         if (!serpKey) {
-          console.log("[OwnerDiscovery] Google: skipped — no SERPAPI_API_KEY");
+          console.log("[OwnerDiscovery] Google: skipped — no SERPAPI_KEY");
           return;
         }
         const queries = [
@@ -734,7 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       async function collectBBB(): Promise<void> {
         if (!serpKey) {
-          console.log("[OwnerDiscovery] BBB: skipped — no SERPAPI_API_KEY");
+          console.log("[OwnerDiscovery] BBB: skipped — no SERPAPI_KEY");
           return;
         }
         let bbbUrl: string | null = null;
@@ -777,7 +777,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       async function collectYelp(): Promise<void> {
         if (!serpKey) {
-          console.log("[OwnerDiscovery] Yelp: skipped — no SERPAPI_API_KEY");
+          console.log("[OwnerDiscovery] Yelp: skipped — no SERPAPI_KEY");
           return;
         }
         let yelpUrl: string | null = null;
@@ -819,7 +819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       async function collectFacebook(): Promise<void> {
-        if (!serpKey) { console.log("[OwnerDiscovery] Facebook: skipped — no SERPAPI_API_KEY"); return; }
+        if (!serpKey) { console.log("[OwnerDiscovery] Facebook: skipped — no SERPAPI_KEY"); return; }
         let fbUrl: string | null = null;
         try {
           const q = `site:facebook.com "${businessName}"${city ? ` "${city}"` : ""} grooming`;
@@ -860,7 +860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       async function collectNextdoor(): Promise<void> {
-        if (!serpKey) { console.log("[OwnerDiscovery] Nextdoor: skipped — no SERPAPI_API_KEY"); return; }
+        if (!serpKey) { console.log("[OwnerDiscovery] Nextdoor: skipped — no SERPAPI_KEY"); return; }
         let ndUrl: string | null = null;
         try {
           const q = `site:nextdoor.com "${businessName}"${city ? ` "${city}"` : ""}`;
@@ -897,7 +897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       async function collectDailyGroomer(): Promise<void> {
-        if (!serpKey) { console.log("[OwnerDiscovery] Daily Groomer: skipped — no SERPAPI_API_KEY"); return; }
+        if (!serpKey) { console.log("[OwnerDiscovery] Daily Groomer: skipped — no SERPAPI_KEY"); return; }
         let dgUrl: string | null = null;
         try {
           const q = `site:thedailygroomer.com "${businessName}"`;
@@ -934,7 +934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       async function collectThumbTack(): Promise<void> {
-        if (!serpKey) { console.log("[OwnerDiscovery] Thumbtack: skipped — no SERPAPI_API_KEY"); return; }
+        if (!serpKey) { console.log("[OwnerDiscovery] Thumbtack: skipped — no SERPAPI_KEY"); return; }
         let ttUrl: string | null = null;
         try {
           const q = `site:thumbtack.com "${businessName}"${city ? ` "${city}"` : ""} grooming`;
@@ -971,7 +971,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       async function collectAngi(): Promise<void> {
-        if (!serpKey) { console.log("[OwnerDiscovery] Angi: skipped — no SERPAPI_API_KEY"); return; }
+        if (!serpKey) { console.log("[OwnerDiscovery] Angi: skipped — no SERPAPI_KEY"); return; }
         let angiUrl: string | null = null;
         try {
           const q = `site:angi.com "${businessName}"${city ? ` "${city}"` : ""} grooming`;
@@ -3679,7 +3679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const queries = await getActiveQueries();
       
       res.json({
-        serpApiConfigured: !!process.env.SERPAPI_API_KEY,
+        serpApiConfigured: !!getSerpApiKey(),
         usage: {
           used: status.usage.usedCredits || 0,
           quota: status.usage.monthlyQuota || 250,
@@ -3699,7 +3699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.json({
-        serpApiConfigured: !!process.env.SERPAPI_API_KEY,
+        serpApiConfigured: !!getSerpApiKey(),
         usage: { used: 0, quota: 250, hardStopAt: 200, warningLevel: 'none', isQuotaReached: false },
         config: { queriesPerZip: 2, maxZipsPerRun: 3, maxRunsPerDay: 1, maxSerpCallsPerHour: 5, enableThirdQuery: false, planType: "free" },
         activeQueries: [],

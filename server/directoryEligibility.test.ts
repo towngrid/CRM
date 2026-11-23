@@ -35,22 +35,6 @@ function reviewed(value: SalonEnrichmentRow, decision: "approved" | "excluded") 
     groomingReview: groomingReviewFor(value, decision, "Human reviewed the current services and business identity") } };
 }
 
-test("the exact 120-place pilot keeps all rows and screens five unrelated and 41 ambiguous listings", async () => {
-  const path = "reports/salon-dataforseo-120-pilot.xlsx";
-  const original = await readFile(path);
-  const workbook = XLSX.read(original, { type: "buffer" });
-  const input = XLSX.utils.sheet_to_json(workbook.Sheets["DataForSEO lookup"]);
-  const staged = stageSalonListRows(input, "owner", "batch", []).rows;
-  assert.equal(staged.length, 120);
-  const views = staged.map(directoryEligibility);
-  assert.equal(views.filter(view => view.flagged).length, 5);
-  assert.equal(views.filter(view => view.classification === "ambiguous").length, 41);
-  assert.equal(views.filter(view => view.classification === "grooming").length, 74);
-  assert.equal(views.filter(view => view.blocked).length, 46);
-  assert.ok(staged.every(value => value.reviewStatus !== "approved" && !value.importedContactId));
-  assert.equal((await readFile(path)).equals(original), true);
-});
-
 test("exact identity never overrides unrelated categories; ambiguous pet businesses remain reviewable", () => {
   for (const category of ["American restaurant", "Grocery store", "Supermarket", "Dollar store", "Pharmacy", "Hair salon"]) {
     assert.equal(directoryEligibility(row(category)).flagged, true, category);

@@ -13,6 +13,9 @@ test("last-moment closure prevents the HTTP request and releases only its unused
     releaseSerpCall: storage.releaseSerpCall,
   };
   const originalFetch = globalThis.fetch;
+  // A placeholder so the key-presence check passes; fetch is stubbed, so it is never sent anywhere.
+  const oldKey = process.env.SERPAPI_KEY;
+  process.env.SERPAPI_KEY = "test-only-key";
   let requests = 0, reservations = 0, releases = 0;
   const hourlyLimits: number[] = [];
   storage.getSerpCache = async () => undefined;
@@ -43,6 +46,7 @@ test("last-moment closure prevents the HTTP request and releases only its unused
     assert.equal(requests, 3);
     assert.equal(releases, 1, "neither old nor new allowance refunds a started provider attempt");
   } finally {
+    if (oldKey === undefined) delete process.env.SERPAPI_KEY; else process.env.SERPAPI_KEY = oldKey;
     Object.assign(storage, originals);
     globalThis.fetch = originalFetch;
   }

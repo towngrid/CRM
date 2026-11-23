@@ -413,7 +413,7 @@ export default function LeadDiscovery() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-yellow-600 dark:text-yellow-300">
-                SerpAPI key is not configured. Please add your SERPAPI_API_KEY secret to enable lead discovery searches.
+                SerpAPI key is not configured. Ask the admin to set the Railway variable SERPAPI_KEY to enable lead discovery searches.
               </p>
             </CardContent>
           </Card>

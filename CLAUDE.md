@@ -33,7 +33,10 @@ A private sales tool for TownGrid, built from a copy of ESyCRM. It finds local b
   - Old guides deleted; `docs/adding-a-user.md` replaces the onboarding guide.
 - The admin account seann@towngrid.net is created automatically when the users table is empty.
 - Database changes: never `drizzle-kit push` (Railway's Postgres is 18; push tries to drop NOT NULL on primary keys, and it exits 0 on errors). Edit `shared/schema.ts`, run `npm run db:generate -- --name what_changed`, commit the new file in `migrations/`. Railway's pre-deploy runs `scripts/migrate.ts`, which applies new files and stops the deploy on any error. `0000_baseline` = the schema after Step 2 (recorded as applied on the CRM database, which push built).
-- Known: 20 of 41 test files fail (same 20 as on `main`; `server/outreachSwitch.test.ts` and the rewritten `shared/dealPlans.test.ts` pass). `npx tsc` and `npm run build` pass.
+- Tests (Nov 23): `npm test` (`scripts/run-tests.mjs`) runs all 42 test files; all pass. Tests use a placeholder `DATABASE_URL` that reaches no database. Checks that needed the deleted ESyPet salon lead files in `reports/` were removed (never bring those files back). `npx tsc` and `npm run build` pass.
+- SerpAPI key: code reads Railway's `SERPAPI_KEY` through `getSerpApiKey()` in `server/appConfig.ts` (the ESyCRM code used `SERPAPI_API_KEY`).
+- Backups: the TownGrid Railway workspace is on the Hobby plan, which allows no volume backups; the CRM Postgres has none (checked Nov 23). Seann to choose before Step 3: Pro plan with Railway backups, or a daily backup job.
 
 ## To-do (agreed with Seann)
-- Before Step 3: fix or remove the 20 test files that already fail on `main`.
+- Before Step 3: set up database backups (Seann's choice of option).
+- Step 3: the old owner-discovery code in `server/routes.ts` (~lines 640-980) searches BBB, Yelp, Facebook, Nextdoor and others; check it against the no-scraping rule when the research code is replaced.

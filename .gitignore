@@ -7,3 +7,7 @@ vite.config.ts.*
 reports/.salon-provider-comparison.lock
 reports/salon-provider-comparison-progress.json.tmp
 reports/salon-provider-comparison-progress.json.*.tmp
+# Private data and secrets (never commit)
+.env*
+reports/
+attached_assets/

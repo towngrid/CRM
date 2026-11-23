@@ -23,5 +23,11 @@ A private sales tool for TownGrid, built from a copy of ESyCRM. It finds local b
 ## Status
 - Step 0 (clean-up): done Nov 22, 2026, waiting for Seann's check. Step 0.1 (Neon password, Replit secrets) done by Seann.
   Left for later steps: the salon research code still uses the internal tag `directory_general` and the salon/mobile "software" tracks (replaced in Steps 2, 3 and 6); `docs/new-salesperson-setup.md`, `replit.md` and `design_guidelines.md` still describe ESyCRM.
-- Before the first Railway deploy (Step 1): add the `ENABLE_OUTREACH_SENDING` switch so the email scheduler can't send.
-- Known: 20 of 40 test files already fail on `main` (same list before and after Step 0). `npx tsc` and `npm run build` pass.
+- Step 1 (Nov 22, 2026): code done and pushed (emailed-code sign-in in `server/auth.ts`, node-postgres driver, `ENABLE_OUTREACH_SENDING` switch: only exactly "on" sends). Railway: Postgres service "Postgres" (CRM only) and empty service "crm" created in project TownGrid, domain crm-production-59a974cd.up.railway.app (port 8080), build `npm run build`, pre-deploy `npm run db:push`, start `npm start`. Waiting for Seann to give Railway's GitHub app access to `towngrid/CRM` and set the variables; then connect the source (branch `towngrid`) and test sign-in. Never touch "marketing-engine".
+- The admin account seann@towngrid.net is created automatically when the users table is empty.
+- `db:push` runs on every deploy; later schema changes that drizzle-kit would ask about (renames, drops) may stall it. Check the pre-deploy log when changing `shared/schema.ts`.
+- Known: 20 of 41 test files fail (same 20 as on `main`; Step 1 added `server/outreachSwitch.test.ts`, which passes). `npx tsc` and `npm run build` pass.
+
+## To-do (agreed with Seann)
+- Before Step 3: fix or remove the 20 test files that already fail on `main`.
+- In Step 2: update or delete the three old ESyCRM guides (`docs/new-salesperson-setup.md`, `replit.md`, `design_guidelines.md`).

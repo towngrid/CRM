@@ -2,6 +2,9 @@
 
 Written Nov 22, 2026; updated the same day (lead types instead of scores, SerpAPI OK, cold email from a look-alike domain via Gmail, never Brevo). For Claude Code (or Sri). Seann is non-technical: give him plain steps and expect him to check the work.
 
+## Build status
+- **Nov 22:** Step 0 (clean-up) and Step 1 (Railway service `crm`, its own Postgres, emailed-code login, sending switch off) done on branch `towngrid`. Railway deploys `towngrid`, not `main`. CRM address: https://crm-production-59a974cd.up.railway.app (Seann signed in successfully). **Nov 23:** Step 2 done and checked by Seann (TownGrid plans and prices editable under Settings → Plans & prices; List and Lead type fields; Site Visit Booked stage; Commissions hidden). Auto-deploy on: every push to `towngrid` goes live by itself; `main` is never deployed (Railway's GitHub app is installed on the `towngrid` GitHub account, separate from `towngrid-net`). Test clean-up done Nov 23 (all 42 test files pass; SerpAPI key name fixed to `SERPAPI_KEY`, which Seann has set in Railway). Railway upgraded to Pro and point-in-time recovery turned on for the CRM's Postgres (Nov 23). Next: Step 3. To-dos noted in the repo's CLAUDE.md: fix or remove the 20 test groups that already failed on main before Step 3; update or delete the three old ESyCRM guides in Step 2.
+
 ## What this is
 A private sales tool for TownGrid, built from a copy of ESyCRM (Seann's CRM, originally built for ESyPet). It finds local businesses by type and town or zip code, checks whether each one has a website, a Facebook page and an Instagram account, checks restaurants for delivery apps and their own online ordering, tags each business with a lead type, and moves the ones Seann approves into contacts, pipeline and (later) email outreach.
 
@@ -17,7 +20,7 @@ A private sales tool for TownGrid, built from a copy of ESyCRM (Seann's CRM, ori
 - **No scraping of sites that forbid it.** Remove the code that opens Facebook pages while pretending to be Facebook's crawler (`facebookexternalhit`), and the code that opens Yelp and BBB pages directly. Use only search results (link, title, snippet) for Facebook, Instagram, Yelp, BBB, DoorDash, Grubhub, Uber Eats and Slice. Opening the business's **own** website is fine.
 
 ## Step 0: clean-up (do first, in this order)
-1. **Seann, by hand (not Claude Code):** reset the Neon database password and update `DATABASE_URL` / `PGPASSWORD` in Replit Secrets; change `SESSION_SECRET` in Replit Secrets. The repo was briefly public on Nov 22 with these in `.env (copy)`.
+1. **Seann, by hand (not Claude Code):** reset the Neon database password and update `DATABASE_URL` / `PGPASSWORD` in Replit Secrets; change `SESSION_SECRET` in Replit Secrets. The repo was briefly public on Nov 22 with these in `.env (copy)`. **Done Nov 22:** password reset in Neon, `DATABASE_URL` and `SESSION_SECRET` updated, unused `NEON_DATABASE_URL` deleted; ESyCRM confirmed still working.
 2. Create the `towngrid` branch.
 3. Delete from the branch: `.env (copy)`, the whole `reports/` folder (salon lead lists), the whole `attached_assets/` folder (screenshots, ESyPet email documents, spreadsheets), `beta-deal-error.png`, `no-login-button.png`, `Sri_SendGrid_Setup.md`. Add `.env*`, `reports/` and `attached_assets/` to `.gitignore`.
 4. Remove all hardcoded ESyPet addresses: `seann@esypet.com`, `ravin@esypet.com`, `srinath@esyntaxis.com`, `esypet.app`, `esypet.com` (in `server/routes.ts` lines ~1567 and ~1966, `server/dailyReportScheduler.ts`, `server/sendgrid.ts`, `server/directoryEmailSequences.ts`, `server/lead-discovery.ts`, `shared/schema.ts`, settings, admin-users and the sequence screens). Admin alert and report recipients come from one setting (Railway variable `ADMIN_ALERT_EMAILS`), default `seann@towngrid.net`.
@@ -63,10 +66,11 @@ A private sales tool for TownGrid, built from a copy of ESyCRM (Seann's CRM, ori
 
 ### Extra checks for the Ordering list
 6. **Delivery apps:** search results for "business name + town" with doordash.com, grubhub.com, ubereats.com and slicelife.com. Record which apps it's on, with links.
+6b. **Delivery buttons on their own website (added Nov 23):** while reading the business's own website, collect every link and button that goes to a delivery or ordering service: doordash.com (including order.online, DoorDash's storefront), ubereats.com, postmates.com, grubhub.com, seamless.com, slicelife.com, chownow.com, toasttab.com, square.site, clover.com, menufy.com, beyondmenu.com, foodbooking.com (GloriaFood). Check the home page, any Order / Menu / Delivery page, and the header and footer. Record each service found with the link and the page it was on. Mark **"Sends customers to delivery apps from own site: Yes"** when the site links to DoorDash, Uber Eats, Grubhub, Seamless, Postmates or Slice: these owners pay commission on customers who were already on their website, which is the strongest ordering pitch. Some buttons only appear after the page's JavaScript runs; if the page uses a site builder that loads them that way and none are found, mark "Unknown", not "No".
 7. **Own online ordering:** on the business's own website, look for ordering links or widgets (Toast, ChowNow, Slice, Square Online, Clover, Menufy, BeyondMenu, Grubhub or DoorDash storefront links). Record "Takes orders on own site: Yes / No / No website".
 8. **Delivery or takeout:** from the Google Maps result if present.
 
-### Lead types instead of scores (decided Nov 22)
+### Lead types (decided Nov 22; a score was added Nov 23, see below)
 Seann's call: **don't grade leads yet.** A business with no website or social may simply not have gone online because of the cost, and could sign once it hears TownGrid's price. So nothing is hidden or marked "weak"; every business gets a **lead type** (a tag), and the CRM tracks which types turn into customers. After the first 50–100 businesses contacted, Seann decides which types to call first.
 
 **Get Seen list, lead types**
@@ -81,11 +85,57 @@ Seann's call: **don't grade leads yet.** A business with no website or social ma
 - **No online ordering anywhere.**
 - **Own ordering already:** takes orders on its own site (Get Seen prospect instead; note the platform, e.g. GloriaFood, which is shutting down).
 
-**"Still open?" check (every business):** flag businesses Google shows as permanently or temporarily closed, and show the newest Google review date when the search result includes it, so Seann can spot businesses that are gone. Don't remove them automatically.
+**"Still open?" check (every business, expanded Nov 23):** use Google's own closed status from the Maps result first ("Permanently closed" / "Temporarily closed"). If the name + address web search returns a Google AI Overview (SerpAPI includes it when Google shows one), save its text and flag the business when it says "permanently closed", but treat it as a hint and show it labeled "Google AI summary", never as proof. Also flag businesses whose newest sources are years old (example: Uncle Dai's, Glen Cove, closed; the only sources found were from 2010–2013). **"Still open?" check (every business):** flag businesses Google shows as permanently or temporarily closed, and show the newest Google review date when the search result includes it, so Seann can spot businesses that are gone. Don't remove them automatically.
 
 **Also flag "Serves customers in person: check"** (storefront or visits customers), because Google profiles need it (see START-HERE).
 
 **Tracking:** reports show, per lead type, how many were contacted, replied, had a visit, and signed. Scoring rules get written later from those numbers. Keep the lead types in one editable list.
+
+### Lead score and Google profile audit (decided Nov 23; adds a score on top of the lead types)
+Seann now wants a **score** so the best candidates rise to the top and he doesn't spend time on weak ones. Lead types stay; the score is added. About 80% automatic is the goal; Seann verifies the rest by hand. **All point values live in one editable settings list** and get reviewed after the first 50–100 businesses contacted (the CRM reports which scores actually signed).
+
+**Two passes, to control SerpAPI cost:**
+- **Pass 1, every business (cheap):** the Google Maps search (one call returns up to 20 businesses), reading the business's own website (free), and up to 2 web searches (website and delivery apps; Facebook/Instagram only if the website doesn't link them). Gives a first score.
+- **Pass 2, only businesses scoring 40+ (deeper, about 4 SerpAPI calls each):** Google Maps place details (`unclaimed_listing`), the reviews engine (`google_maps_reviews`, newest first: each review's `response` shows whether the owner replied), the Posts API (Google "Updates"), and the Photos API ("By owner" photos and dates). Show the credit estimate and ask before running.
+- **Pass 3, Seann by hand (top leads only):** the CRM shows a short checklist (cover photo looks bad, Facebook/Instagram followers and last post, anything Google got wrong); ticking boxes updates the score.
+
+**Social links (Pass 1):** read the website's home page, contact page, header and footer, and search the raw page source (not just visible icons) for facebook.com, instagram.com, linkedin.com, x.com / twitter.com, youtube.com, pinterest.com and tiktok.com. Save every link found. Only if Facebook or Instagram is missing, run one search each (name + town, limited to that site). Never open the social pages themselves from code.
+
+**Starting point values (Get Seen opportunity: what TownGrid can fix):**
+| Signal | Points | How found |
+|---|---|---|
+| No website | +25 | Pass 1 |
+| Google's Website button missing, goes to Facebook, or dead link | +20 | Pass 1 |
+| Website old (copyright 3+ years), broken, or not phone-friendly | +15 | Pass 1 |
+| Website owned by the ordering company (Slice, ChowNow, Owner.com…) | +10 | Pass 1 |
+| Google profile **unclaimed** ("Own this business?") | +25 | Pass 2 (`unclaimed_listing: true`) |
+| Owner replied to fewer than 2 of the newest 10 reviews | +15 | Pass 2 |
+| An unanswered 1–2 star review among the newest 10 | +5 | Pass 2 |
+| No Google "Updates" posts in 90 days | +5 | Pass 2 |
+| No owner photo in 6 months | +10 | Pass 2 |
+| Review count under half the average of the top 3 businesses in the same search | +10 | Pass 1 (same Maps search) |
+| No Facebook and no Instagram found | +10 | Pass 1 |
+| Social accounts exist but aren't linked from the website | +5 | Pass 1 |
+
+**Ordering opportunity (restaurants, pizzerias, food trucks):**
+| Signal | Points |
+|---|---|
+| On DoorDash / Uber Eats / Grubhub / Seamless, no ordering of its own | +25 |
+| Own website's Order button goes to one of those apps | +20 more |
+| Orders through Slice (per-order fee pitch) | +10 |
+| On GloriaFood (shutting down: must switch) | +30 |
+| Own ordering through a register company (PDQ, Toast…) | 0 for ordering (Get Seen only) |
+
+**"Alive and able to pay" (keeps dead or tiny businesses from scoring high):**
+| Signal | Points |
+|---|---|
+| Rating 4.0+ and 30+ Google reviews | +10 |
+| A Google review in the last 60 days | +5 |
+| Seann's hand check: posts on Facebook/Instagram in the last 30 days | +10 |
+
+**Knock-outs (set aside, not scored):** permanently or temporarily closed; part of a chain or group (same name at several addresses, or a corporate website); no in-person service (Google won't allow a profile); outside the target industries unless Seann adds them.
+
+**Tiers:** **A = 60+** (visit or call first), **B = 40–59** (cold email), **C = under 40** (later). Each lead shows its score with the reasons (e.g. "+25 no website, +25 unclaimed, +10 rating 4.3 / 88 reviews"), so Seann can see why and correct anything wrong.
 
 ### Results screen
 - One table per search: name, town, phone, lead type, website (link or "No Website found"), Facebook, Instagram (link or "No social found"), delivery apps, own ordering, rating, reviews.
@@ -96,6 +146,7 @@ Seann's call: **don't grade leads yet.** A business with no website or social ma
 ## Step 4: business record and pre-visit page
 - On each contact and deal, fill the existing "Social & Web" and "Digital Presence" sections with the findings above, with the date each was checked.
 - Add a **Pre-visit brief** button on the deal page that shows one printable page: what they have now (website, Google rating and reviews, social links, delivery apps), the lead type and why, which TownGrid plan fits, room for Seann's notes, and the Site Visit and Log Call buttons that already exist. Talking points come from `claude/SALES-PITCHES.md` later; for now leave a notes box.
+- **Research fields (added Nov 23, from `claude/PRE-VISIT-RESEARCH.md`):** owner first name with its status (Supported / Suggested / Not confirmed) and source link; public email with the page it appears on (never guessed); contact form URL (never submitted); booking or ordering platform; Google profile (rating, reviews, does the owner reply, hours); still open; serves customers in person; best-fit plan; one thing to show the owner. Keep the old ESyCRM owner-name and email-finding code only where it follows the rules there (search results only for BBB, Yelp, Facebook and other directories; the business's own website may be opened). Cold-email greetings use the first name only when it is Supported, otherwise "Hi [Business Name] team".
 
 ## Step 5: fixes carried over from ESyCRM
 - Dashboard percentages ("+12% from last month" etc.) are typed into `client/src/components/dashboard/metrics-grid.tsx`. Calculate them from real data or remove them.

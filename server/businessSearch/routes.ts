@@ -8,7 +8,7 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { businessLeads, businessSearches, type BusinessLead } from "@shared/schema";
 import {
-  BUSINESS_TYPES, OTHER_BUSINESS_TYPE, businessTypeLabel, estimateCredits, normalizePlace, townAndZip,
+  BUSINESS_TYPES, OTHER_BUSINESS_TYPE, businessTypeLabel, estimateCredits, isZip, normalizePlace, townAndZip,
 } from "@shared/businessSearch";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
 import { getSerpUsageStatus } from "../lead-discovery";
@@ -51,7 +51,7 @@ async function budget() {
 async function alreadyKnownIn(user: string, places: string[], pages: number): Promise<number> {
   let total = 0;
   for (const place of places) {
-    const where = /^d{5}$/.test(place)
+    const where = isZip(place)
       ? and(eq(businessLeads.userId, user), eq(businessLeads.zip, place))
       : and(eq(businessLeads.userId, user), sql`lower(${businessLeads.town}) = lower(${place})`);
     const [{ count }] = await db.select({ count: sql<number>`count(distinct coalesce(${businessLeads.googlePlaceId}, ${businessLeads.id}))::int` }).from(businessLeads).where(where);

@@ -104,6 +104,11 @@ export function townForZip(zip: string): string | null {
   return LONG_ISLAND_ZIPS.find(z => z.zip === zip)?.town ?? null;
 }
 
+/** "11542" yes; "Glen Cove" no. */
+export function isZip(place: string): boolean {
+  return /^\d{5}$/.test(place);
+}
+
 /** A place to search: a 5-digit zip, or a town name ("Glen Cove"). */
 export function normalizePlace(input: string): string | null {
   const text = input.trim().replace(/\s+/g, " ");

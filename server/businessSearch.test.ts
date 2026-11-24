@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  decideLeadType, dedupKeys, estimateCredits, isNeverOpenUrl, normalizePlace, resultMatchesBusiness, townAndZip, townForZip,
+  decideLeadType, dedupKeys, estimateCredits, isNeverOpenUrl, isZip, normalizePlace, resultMatchesBusiness, townAndZip, townForZip,
 } from "@shared/businessSearch";
 import { checkWebsite, copyrightYear, hasContactForm, orderingFromSite, orderingLinksIn, socialLinksIn } from "./businessSearch/website";
 import type { SalonFetchRuntime } from "./salonPublicFetch";
@@ -73,6 +73,7 @@ test("slow or very large websites are 'couldn't check', not broken", async () =>
 
 test("places, towns and duplicates", () => {
   assert.equal(townForZip("11542"), "Glen Cove");
+  assert.ok(isZip("11542") && !isZip("Glen Cove") && !isZip("ddddd"));
   assert.equal(normalizePlace(" 11542 "), "11542");
   assert.equal(normalizePlace("Glen Cove"), "Glen Cove");
   assert.equal(normalizePlace("<script>"), null);

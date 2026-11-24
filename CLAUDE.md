@@ -35,8 +35,8 @@ A private sales tool for TownGrid, built from a copy of ESyCRM. It finds local b
 - Database changes: never `drizzle-kit push` (Railway's Postgres is 18; push tries to drop NOT NULL on primary keys, and it exits 0 on errors). Edit `shared/schema.ts`, run `npm run db:generate -- --name what_changed`, commit the new file in `migrations/`. Railway's pre-deploy runs `scripts/migrate.ts`, which applies new files and stops the deploy on any error. `0000_baseline` = the schema after Step 2 (recorded as applied on the CRM database, which push built).
 - Tests (Nov 23): `npm test` (`scripts/run-tests.mjs`) runs all 42 test files; all pass. Tests use a placeholder `DATABASE_URL` that reaches no database. Checks that needed the deleted ESyPet salon lead files in `reports/` were removed (never bring those files back). `npx tsc` and `npm run build` pass.
 - SerpAPI key: code reads Railway's `SERPAPI_KEY` through `getSerpApiKey()` in `server/appConfig.ts` (the ESyCRM code used `SERPAPI_API_KEY`).
-- Backups: the TownGrid Railway workspace is on the Hobby plan, which allows no volume backups; the CRM Postgres has none (checked Nov 23). Seann to choose before Step 3: Pro plan with Railway backups, or a daily backup job.
+- Backups: Railway upgraded to Pro (Nov 23); the CRM Postgres has point-in-time recovery and weekly backups.
+- Step 3 (started Nov 23) is built in parts, stopping after each for Seann's check: 3a search + Pass 1, 3b lead score, 3c Pass 2 profile audit. Ask before any SerpAPI search runs (show the credit estimate; report credits used after) and before any database table change. AI key, if needed: Railway shared variable `ANTHROPIC_API_KEY`; never anything from the Replit CRM.
 
 ## To-do (agreed with Seann)
-- Before Step 3: set up database backups (Seann's choice of option).
 - Step 3: the old owner-discovery code in `server/routes.ts` (~lines 640-980) searches BBB, Yelp, Facebook, Nextdoor and others; check it against the no-scraping rule when the research code is replaced.

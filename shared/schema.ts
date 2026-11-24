@@ -729,6 +729,7 @@ export const businessSearches = pgTable("business_searches", {
   businessesChecked: integer("businesses_checked").notNull().default(0),
   outsideArea: integer("outside_area").notNull().default(0),
   duplicatesRemoved: integer("duplicates_removed").notNull().default(0),
+  alreadyFound: integer("already_found").notNull().default(0), // found in an earlier search: skipped, 0 credits
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   startedAt: timestamp("started_at"),

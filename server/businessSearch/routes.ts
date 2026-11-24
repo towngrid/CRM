@@ -1,7 +1,7 @@
 // Business Search API (Step 3a). Searches cost SerpAPI credits, so starting one is admin-only
 // and needs `confirm: true` after the screen has shown the estimate.
 import type { Express, RequestHandler } from "express";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as XLSX from "xlsx";
 import { db } from "../db";
@@ -45,6 +45,19 @@ async function budget() {
     perHour: status.config.maxSerpCallsPerHour,
     keySet: !!getSerpApiKey(),
   };
+}
+
+/** Businesses earlier searches already found in each place (zip or town), capped at what this search returns per place. */
+async function alreadyKnownIn(user: string, places: string[], pages: number): Promise<number> {
+  let total = 0;
+  for (const place of places) {
+    const where = /^d{5}$/.test(place)
+      ? and(eq(businessLeads.userId, user), eq(businessLeads.zip, place))
+      : and(eq(businessLeads.userId, user), sql`lower(${businessLeads.town}) = lower(${place})`);
+    const [{ count }] = await db.select({ count: sql<number>`count(distinct coalesce(${businessLeads.googlePlaceId}, ${businessLeads.id}))::int` }).from(businessLeads).where(where);
+    total += Math.min(count, pages * 20);
+  }
+  return total;
 }
 
 function userId(req: any): string {
@@ -114,7 +127,8 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
   app.post("/api/business-search/estimate", isAuthenticated, async (req, res) => {
     try {
       const input = cleanInput(req.body);
-      res.json({ places: input.places, estimate: estimateCredits(input.places.length, input.pagesPerPlace, input.leadList), budget: await budget() });
+      const known = await alreadyKnownIn(userId(req), input.places, input.pagesPerPlace);
+      res.json({ places: input.places, estimate: estimateCredits(input.places.length, input.pagesPerPlace, input.leadList, known), budget: await budget() });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ message: error.issues[0]?.message ?? "Check the form" });
       res.status(500).json({ message: "Could not estimate" });
@@ -125,7 +139,7 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     try {
       if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the credit estimate first." });
       const input = cleanInput(req.body);
-      const estimate = estimateCredits(input.places.length, input.pagesPerPlace, input.leadList);
+      const estimate = estimateCredits(input.places.length, input.pagesPerPlace, input.leadList, await alreadyKnownIn(userId(req), input.places, input.pagesPerPlace));
       const b = await budget();
       if (!b.keySet) return res.status(400).json({ message: "SERPAPI_KEY is not set in Railway." });
       if (estimate.likely > b.left) {

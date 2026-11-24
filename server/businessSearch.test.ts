@@ -92,6 +92,12 @@ test("credit estimate: Maps per place, then up to 3 per business on the Ordering
   assert.equal(e.max, 1 + 20 * 3);
   assert.ok(e.likely < e.max && e.likely > 20);
   assert.equal(estimateCredits(2, 1, "get_seen").max, 2 + 40 * 2);
+  // 19 Glen Cove restaurants already checked: asking for "up to 40" only expects ~21 new ones.
+  const again = estimateCredits(1, 2, "ordering", 19);
+  assert.equal(again.alreadyKnown, 19);
+  assert.equal(again.likely, Math.ceil(2 + 21 * 1.75));
+  assert.equal(again.max, 2 + 40 * 3, "the worst case still assumes all new");
+  assert.equal(estimateCredits(1, 1, "ordering", 50).alreadyKnown, 20, "capped at what one page returns");
 });
 
 test("never opens Facebook, Instagram, Yelp, BBB or delivery-app pages", () => {

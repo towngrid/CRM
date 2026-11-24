@@ -70,6 +70,13 @@ function mapsBusiness(local: any): MapsBusiness {
   };
 }
 
+/** Same business if the Google listing, phone, own website or name + address match. */
+function leadKeys(b: { placeId: string | null; name: string; address: string | null; phone: string | null; website: string | null }): string[] {
+  const keys = dedupKeys({ name: b.name, address: b.address, phone: b.phone, website: b.website });
+  if (b.placeId) keys.push(`place:${b.placeId}`);
+  return keys;
+}
+
 function inArea(b: MapsBusiness, place: string): boolean {
   if (/^\d{5}$/.test(place)) {
     if (b.zip) return b.zip === place;
@@ -131,14 +138,24 @@ async function mapsPhase(search: BusinessSearch): Promise<void> {
       }
     }
   }
-  // Remove duplicates by phone, website, and name + address.
+  // Businesses already found in Seann's earlier searches are skipped: never checked again, 0 credits.
+  const earlier = new Set<string>();
+  const before = await db.select({
+    placeId: businessLeads.googlePlaceId, name: businessLeads.name, address: businessLeads.address,
+    phone: businessLeads.phone, website: businessLeads.websiteUrl,
+  }).from(businessLeads).where(and(eq(businessLeads.userId, search.userId), sql`${businessLeads.searchId} <> ${search.id}`));
+  for (const b of before) leadKeys(b).forEach(k => earlier.add(k));
+
+  // Remove duplicates by Google listing, phone, website, and name + address.
   const seen = new Set<string>();
   const unique: MapsBusiness[] = [];
   let dups = 0;
+  let alreadyFound = 0;
   for (const b of all) {
-    const keys = dedupKeys({ name: b.name, address: b.address, phone: b.phone, website: b.website });
+    const keys = leadKeys(b);
     if (keys.some(k => seen.has(k))) { dups++; continue; }
     keys.forEach(k => seen.add(k));
+    if (keys.some(k => earlier.has(k))) { alreadyFound++; continue; }
     unique.push(b);
   }
   await db.transaction(async tx => {
@@ -152,7 +169,7 @@ async function mapsPhase(search: BusinessSearch): Promise<void> {
         leadList: search.leadList, mapsResult: b.raw,
       })));
     }
-    await tx.update(businessSearches).set({ businessesFound: unique.length, outsideArea: outside, duplicatesRemoved: dups })
+    await tx.update(businessSearches).set({ businessesFound: unique.length, outsideArea: outside, duplicatesRemoved: dups, alreadyFound })
       .where(eq(businessSearches.id, search.id));
   });
 }

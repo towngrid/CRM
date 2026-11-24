@@ -1,0 +1,1 @@
+ALTER TABLE "business_searches" ADD COLUMN "already_found" integer DEFAULT 0 NOT NULL;

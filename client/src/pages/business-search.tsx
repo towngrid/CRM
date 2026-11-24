@@ -26,7 +26,7 @@ type SerpAccount = { plan: string | null; searchesLeft: number | null; perMonth:
 type SearchRow = {
   id: string; label: string; businessType: string; leadList: string; places: string[]; pagesPerPlace: number; status: string;
   estimate: CreditEstimate | null; creditsUsed: number; cachedCalls: number; businessesFound: number; businessesChecked: number;
-  outsideArea: number; duplicatesRemoved: number; errorMessage: string | null; createdAt: string; finishedAt: string | null; running: boolean;
+  outsideArea: number; duplicatesRemoved: number; alreadyFound: number; errorMessage: string | null; createdAt: string; finishedAt: string | null; running: boolean;
 };
 type Lead = {
   id: string; name: string; address: string | null; town: string | null; zip: string | null; phone: string | null;
@@ -173,6 +173,10 @@ function NewSearch({ onStarted, isAdmin }: { onStarted: (id: string) => void; is
                 <li>Google Maps: {estimate.estimate.mapsCalls} search{estimate.estimate.mapsCalls === 1 ? "" : "es"} (up to {estimate.estimate.maxBusinesses} businesses)</li>
                 <li>Checks: up to {estimate.estimate.perBusinessMax} searches per business (website if Google has none, Facebook/Instagram if the website doesn't link them{list === "ordering" ? ", delivery apps" : ""}). Reading their websites is free.</li>
               </ul>
+              {estimate.estimate.alreadyKnown > 0 && (
+                <p><b>{estimate.estimate.alreadyKnown}</b> businesses here were already found in your earlier searches. They'll be skipped (0 credits).
+                  {estimate.estimate.alreadyKnown >= estimate.estimate.maxBusinesses && " To find new ones, pick a higher \"How many per place\"."}</p>
+              )}
               <p className="text-base">Likely about <b>{estimate.estimate.likely}</b> credits, at most <b>{estimate.estimate.max}</b>.</p>
               <p className="text-muted-foreground">Left this month before the CRM's stop: {estimate.budget.left}. Searches already made in the last 30 days are reused for free.</p>
               {estimate.estimate.likely > estimate.budget.left && <p className="font-medium text-destructive">Not enough credits left this month for this search.</p>}
@@ -383,6 +387,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             {" "}estimate was ~{s.estimate?.likely ?? "?"}
             {s.outsideArea ? ` · ${s.outsideArea} outside the area skipped` : ""}
             {s.duplicatesRemoved ? ` · ${s.duplicatesRemoved} duplicates removed` : ""}
+            {s.alreadyFound ? ` · ${s.alreadyFound} already found in earlier searches, skipped` : ""}
           </p>
           {s.errorMessage && <p className="text-sm text-amber-700 dark:text-amber-400">{s.errorMessage}</p>}
           <div className="flex flex-wrap gap-2">

@@ -123,20 +123,31 @@ export function placeQuery(place: string): string {
 // then per business: website search (only if Google lists no website), one combined
 // Facebook/Instagram search (only if the website doesn't link both), and for the
 // Ordering list one delivery-apps search.
-export interface CreditEstimate { mapsCalls: number; maxBusinesses: number; perBusinessMax: number; max: number; likely: number }
+export interface CreditEstimate {
+  mapsCalls: number; maxBusinesses: number; perBusinessMax: number; max: number; likely: number;
+  /** Businesses in these places already found by earlier searches: skipped, 0 credits. */
+  alreadyKnown: number;
+}
 
-export function estimateCredits(places: number, pages: number, list: LeadList): CreditEstimate {
+/**
+ * `alreadyKnown`: how many businesses earlier searches already found in these places (up to
+ * the number this search can return per place). They are skipped, so they don't count toward
+ * "likely"; "max" stays the worst case in case Google shows different businesses this time.
+ */
+export function estimateCredits(places: number, pages: number, list: LeadList, alreadyKnown = 0): CreditEstimate {
   const mapsCalls = places * pages;
   const maxBusinesses = mapsCalls * 20;
   const perBusinessMax = list === "ordering" ? 3 : 2;
   // Typically ~1 in 4 businesses has no website on Google and ~half need the social search.
   const perBusinessLikely = (list === "ordering" ? 1 : 0) + 0.25 + 0.5;
+  const known = Math.min(Math.max(0, alreadyKnown), maxBusinesses);
   return {
     mapsCalls,
     maxBusinesses,
     perBusinessMax,
     max: mapsCalls + maxBusinesses * perBusinessMax,
-    likely: Math.ceil(mapsCalls + maxBusinesses * perBusinessLikely),
+    likely: Math.ceil(mapsCalls + (maxBusinesses - known) * perBusinessLikely),
+    alreadyKnown: known,
   };
 }
 

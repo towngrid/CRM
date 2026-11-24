@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { businessLeads, businessSearches, type BusinessLead, type BusinessSearch } from "@shared/schema";
 import {
-  ORDERING_SERVICES, businessTypeQuery, decideLeadType, dedupKeys, hostMatches, hostOf,
+  ORDERING_SERVICES, businessTypeQuery, decideLeadType, dedupKeys, hostMatches, hostOf, nameTokens,
   orderingServiceForUrl, placeQuery, resultMatchesBusiness, townAndZip, townForZip,
   type OrderingFindings, type SocialFindings, type StillOpenFindings, type WebsiteFindings,
 } from "@shared/businessSearch";
@@ -29,13 +29,16 @@ const NOT_OWN_SITE = [
   "loopnet.com", "zillow.com", "wikipedia.org", "seamless.com", "postmates.com", "toasttab.com", "chownow.com",
   "order.online", "menufy.com", "beyondmenu.com", "square.site", "clover.com", "ubereats.com", "doordash.com",
   "grubhub.com", "slicelife.com", "birdeye.com", "nicelocal.com", "waze.com", "roadtrippers.com", "dnb.com",
-  "bizapedia.com", "opencorporates.com", "buzzfile.com", "cylex.us.com", "hotfrog.com", "superpages.com", "local.com",
+  "bizapedia.com", "corner.inc", "menupix.com", "grubhub.com", "beyondmenu.com", "restaurantclicks.com", "trycaviar.com", "opencorporates.com", "buzzfile.com", "cylex.us.com", "hotfrog.com", "superpages.com", "local.com",
   "citysearch.com", "merchantcircle.com", "showmelocal.com", "ezlocal.com", "brownbook.net", "wheree.com",
 ];
 
-function isOwnSiteCandidate(url: string): boolean {
+/** A web-search result counts as their own site only if it isn't a directory and its address carries a word of their name. */
+function isOwnSiteCandidate(url: string, name: string): boolean {
   const host = hostOf(url);
-  return !!host && !NOT_OWN_SITE.some(d => hostMatches(host, d));
+  if (!host || NOT_OWN_SITE.some(d => hostMatches(host, d))) return false;
+  const domain = host.split(".").slice(0, -1).join("");
+  return nameTokens(name).some(t => t.length >= 3 && domain.includes(t));
 }
 
 // ── Google Maps ───────────────────────────────────────────────────────────
@@ -47,7 +50,11 @@ interface MapsBusiness {
 }
 
 function mapsBusiness(local: any): MapsBusiness {
-  const { town, zip } = townAndZip(local.address);
+  const parsed = townAndZip(local.address);
+  const zip = parsed.zip;
+  // Odd address formats ("New York, Glen Cove, School St, ..."): trust the town the zip list knows, if it's in the address.
+  const known = zip ? townForZip(zip) : null;
+  const town = known && String(local.address ?? "").toLowerCase().includes(known.toLowerCase()) ? known : parsed.town;
   return {
     name: String(local.title ?? "").trim(),
     address: local.address ?? null,
@@ -195,7 +202,7 @@ function isSocialPage(url: string, site: "facebook" | "instagram"): boolean {
     return (hostMatches(host, "facebook.com") || hostMatches(host, "fb.com")) &&
       !/^\/(groups|events|posts|photos|videos|watch|search|marketplace|hashtag|story\.php|permalink\.php|reel)/.test(path) && !/\/posts\/|\/photos\/|\/videos\//.test(path);
   }
-  return hostMatches(host, "instagram.com") && !/^\/(p|reel|reels|explore|stories|accounts)\//.test(path) && path.length > 1;
+  return hostMatches(host, "instagram.com") && !/^\/(p|reel|reels|explore|stories|accounts|popular)\//.test(path) && path.length > 1;
 }
 
 type Who = { name: string; town?: string | null; phone?: string | null };
@@ -231,6 +238,7 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
   const where = lead.town ? `${lead.town} NY` : (lead.zip ?? "");
   const local = (lead.mapsResult ?? {}) as any;
   const webResults: Organic[] = [];
+  const nameSearchResults: Organic[] = []; // the "name + town" search only, for the still-open dates
   let aiSummary: string | null = null;
 
   // 1. Website: Google's, or one web search when Google lists none.
@@ -241,8 +249,9 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
     const data = await serpRequest(search.id, { engine: "google", q: `"${lead.name}" ${where}`, num: "10", hl: "en", gl: "us" });
     const results = organics(data);
     webResults.push(...results);
+    nameSearchResults.push(...results);
     aiSummary = aiOverviewText(data);
-    const match = results.find(r => isOwnSiteCandidate(r.link) && resultMatchesBusiness(r, who));
+    const match = results.find(r => isOwnSiteCandidate(r.link, lead.name) && resultMatchesBusiness(r, who));
     site = await checkWebsite(match ? match.link : null, match ? "search" : "none");
     if (!match) site.website.googleButton = "missing";
   }
@@ -294,7 +303,8 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
   }
 
   // Still open?
-  const dates = webResults.map(r => parseResultDate(r.date)).filter((d): d is Date => !!d);
+  // Only the name search: Facebook/Instagram results carry old post dates even for open businesses.
+  const dates = nameSearchResults.map(r => parseResultDate(r.date)).filter((d): d is Date => !!d);
   const newest = dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))) : null;
   const sourcesLookOld = dates.length >= 2 && !!newest && newest.getTime() < Date.now() - 3 * 365 * 86_400_000;
   const googleStatus = (lead.googleStatus ?? "unknown") as StillOpenFindings["googleStatus"];
@@ -402,6 +412,22 @@ async function withHourlyWait<T>(searchId: string, work: () => Promise<T>): Prom
       await setStatus(searchId, { errorMessage: null });
     }
   }
+}
+
+/** "Check again": redo Pass 1 for every business (Maps isn't searched again; repeated web searches come from the cache). */
+export async function resetForRecheck(searchId: string): Promise<void> {
+  const leads = await db.select({ id: businessLeads.id, mapsResult: businessLeads.mapsResult }).from(businessLeads).where(eq(businessLeads.searchId, searchId));
+  await db.transaction(async tx => {
+    for (const l of leads) {
+      const b = l.mapsResult ? mapsBusiness(l.mapsResult) : null;
+      await tx.update(businessLeads).set({
+        checkStatus: "pending", checkError: null,
+        ...(b ? { town: b.town, zip: b.zip, websiteUrl: b.website } : {}),
+      }).where(eq(businessLeads.id, l.id));
+    }
+    await tx.update(businessSearches).set({ businessesChecked: 0, status: "running", errorMessage: null, finishedAt: null })
+      .where(eq(businessSearches.id, searchId));
+  });
 }
 
 /** After a restart or deploy, searches that were running are marked stopped so Seann can resume them. */

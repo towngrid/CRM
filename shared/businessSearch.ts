@@ -293,9 +293,9 @@ export function websiteIsOldOrBroken(w: LeadTypeInput["website"], now = new Date
   return reasons;
 }
 
-/** A website that counts: Google's button doesn't just go to Facebook, and the site isn't a delivery-app page. */
+/** A website that counts: Google's button doesn't just go to Facebook, and isn't just an ordering/delivery page. */
 export function hasRealWebsite(w: LeadTypeInput["website"]): boolean {
-  return !!w.url && w.googleButton !== "social";
+  return !!w.url && w.googleButton !== "social" && w.googleButton !== "ordering_site";
 }
 
 export function decideLeadType(input: LeadTypeInput): string {
@@ -327,15 +327,21 @@ export function resultMatchesBusiness(
   result: { title?: string; snippet?: string; link?: string },
   business: { name: string; town?: string | null; phone?: string | null },
 ): boolean {
-  const text = `${result.title ?? ""} ${result.snippet ?? ""} ${result.link ?? ""}`.toLowerCase().replace(/['’]/g, "");
+  const shown = `${result.title ?? ""} ${result.snippet ?? ""}`.toLowerCase().replace(/['’]/g, "");
+  const link = (result.link ?? "").toLowerCase();
+  const text = `${shown} ${link.replace(/[-_/]+/g, " ")}`;
   // Town words in the name ("Joe's of Glen Cove") don't help tell businesses apart.
   const townWords = new Set(nameTokens(business.town ?? ""));
   const allTokens = nameTokens(business.name);
   const tokens = allTokens.filter(t => !townWords.has(t)).length ? allTokens.filter(t => !townWords.has(t)) : allTokens;
-  const squashed = text.replace(/[^a-z0-9]/g, "");
+  const squashed = `${shown} ${link}`.replace(/[^a-z0-9]/g, "");
+  // Whole words from the title and snippet only: a link can hold a street address ("90-forest-ave"),
+  // and "ave" must not match "avenue". Long words may also match inside a URL ("greeneatsli").
+  const words = new Set(shown.split(/[^a-z0-9]+/).filter(Boolean));
+  const hit = (t: string) => words.has(t) || (t.length >= 5 && squashed.includes(t));
   const nameOk = tokens.length === 0
     ? squashed.includes(business.name.toLowerCase().replace(/[^a-z0-9]/g, ""))
-    : tokens.filter(t => text.includes(t) || squashed.includes(t)).length >= Math.min(tokens.length, Math.max(1, Math.ceil(tokens.length * 0.6)));
+    : tokens.filter(hit).length >= Math.min(tokens.length, Math.max(1, Math.ceil(tokens.length * 0.6)));
   if (!nameOk) return false;
   const town = business.town?.toLowerCase();
   const phone = business.phone ? digits(business.phone).slice(-10) : "";

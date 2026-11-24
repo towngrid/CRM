@@ -43,6 +43,31 @@ test("search results only count when name and town or phone match", () => {
   assert.ok(!resultMatchesBusiness({ title: "Tony's Pizzeria - Glen Cove, NY" }, biz));
 });
 
+test("lessons from the Glen Cove test (Nov 24)", () => {
+  // "Ave" must not match "Avenue": Forest Ave Grill is not Forest Avenue Pizza.
+  assert.ok(!resultMatchesBusiness({ title: "Forest Avenue Pizza - Glen Cove - Grubhub", link: "https://www.grubhub.com/restaurant/forest-avenue-pizza-90-forest-ave-glen-cove/1" },
+    { name: "Forest Ave Grill", town: "Glen Cove" }));
+  assert.ok(resultMatchesBusiness({ title: "Green Eats - Glen Cove", link: "https://greeneatsli.com" }, { name: "Green Eats", town: "Glen Cove" }));
+  // Page code and the builder's own account aren't the business's Facebook.
+  const html = `<html xmlns:fb="http://www.facebook.com/2008/fbml"><a href="https://www.facebook.com/wix">Wix</a>
+    <a href="https://www.instagram.com/popular/american-cafe-glen-cove/">x</a><a href="https://www.facebook.com/RealPlace">fb</a></html>`;
+  const social = socialLinksIn(html, "https://x.example/");
+  assert.equal(social.facebook?.url, "https://www.facebook.com/RealPlace");
+  assert.equal(social.instagram, undefined);
+  // An ordering page isn't a website (Get Seen list).
+  assert.equal(decideLeadType({ list: "get_seen", now: NOW, website: site({ googleButton: "ordering_site" }), hasFacebook: true, hasInstagram: false }), "social_no_website");
+});
+
+test("slow or very large websites are 'couldn't check', not broken", async () => {
+  const runtime: SalonFetchRuntime = {
+    resolve: async () => [{ address: "93.184.216.34", family: 4 }],
+    request: async () => { throw new Error("Public page request timed out"); },
+  };
+  const result = await checkWebsite("https://slow.example/", "google", runtime);
+  assert.equal(result.website.loads, "unknown");
+  assert.equal(result.website.googleButton, "ok");
+});
+
 test("places, towns and duplicates", () => {
   assert.equal(townForZip("11542"), "Glen Cove");
   assert.equal(normalizePlace(" 11542 "), "11542");

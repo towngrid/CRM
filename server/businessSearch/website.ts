@@ -40,6 +40,8 @@ function hrefs(html: string, base: string): { url: string; text: string }[] {
   return out;
 }
 
+// Links that are page code or the website builder's own account, not the business's page.
+const SOCIAL_JUNK = /^\/(2008\/fbml|wix|wixcom|squarespace|godaddy|weebly|bentobox|getbento|spothopper|popmenu|toasttab|toast|wordpress|wordpressdotcom|shopify|duda|webflow|elementor|yoast|popular|tags)(\/|$)/i;
 const SOCIAL_SKIP = /\/(sharer|share|plugins|dialog|tr|intent|hashtag|p|reel|reels|explore|accounts|watch|embed|pin\/create)(\/|\?|$)|[?&](u|url)=/i;
 
 export function socialLinksIn(html: string, pageUrl: string): Partial<Record<SocialKey, FoundLink>> {
@@ -50,7 +52,7 @@ export function socialLinksIn(html: string, pageUrl: string): Partial<Record<Soc
     const site = SOCIAL_SITES.find(s => s.hosts.some(h => hostMatches(host, h)));
     if (!site || found[site.key]) continue;
     const path = new URL(url).pathname;
-    if (path === "/" || path === "" || SOCIAL_SKIP.test(new URL(url).pathname + new URL(url).search)) continue;
+    if (path === "/" || path === "" || SOCIAL_JUNK.test(path) || SOCIAL_SKIP.test(new URL(url).pathname + new URL(url).search)) continue;
     found[site.key] = { url, page: pageUrl };
   }
   return found;
@@ -178,6 +180,7 @@ async function readPage(url: string, runtime?: SalonFetchRuntime) {
     timeoutMs: PAGE_TIMEOUT_MS,
     userAgent: BROWSER_UA,
     maxRedirects: 4,
+    maxBytes: 4 * 1024 * 1024,
     runtime,
     allowRedirect: next => !isNeverOpenUrl(next.href),
   });
@@ -232,8 +235,9 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
     const status = statusFromError(error);
     website.httpStatus = status;
     website.error = String((error as Error)?.message ?? error).slice(0, 200);
-    // 401/403/429/503 usually mean a bot shield, not a broken site.
-    if (status && [401, 403, 406, 429, 503].includes(status)) {
+    // 401/403/429/503 usually mean a bot shield, not a broken site; slow or very large pages aren't broken either.
+    const slow = /timed out|size limit|socket hang up|ECONNRESET/i.test(website.error);
+    if (slow || (status && [401, 403, 406, 429, 503].includes(status))) {
       website.loads = "unknown";
     } else {
       website.loads = "no";

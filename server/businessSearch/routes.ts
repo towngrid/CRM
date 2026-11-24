@@ -15,7 +15,7 @@ import { getSerpUsageStatus } from "../lead-discovery";
 import { createDealRecord } from "../dealCreation";
 import { getSerpApiKey } from "../appConfig";
 import { serpAccount } from "./serp";
-import { isRunning, markInterruptedSearches, runSearch } from "./runner";
+import { isRunning, markInterruptedSearches, resetForRecheck, runSearch } from "./runner";
 
 const searchInput = z.object({
   businessType: z.string().refine(v => v === OTHER_BUSINESS_TYPE || BUSINESS_TYPES.some(t => t.value === v), "Pick a business type"),
@@ -169,6 +169,18 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     await db.update(businessSearches).set({ status: "running", errorMessage: null }).where(eq(businessSearches.id, search.id));
     void runSearch(search.id);
     res.json({ ok: true });
+  });
+
+  // Redo the checks for every business (needs confirm: the screen shows the cost first).
+  app.post("/api/business-search/:id/recheck", isAdmin, async (req: any, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the cost first." });
+    const [search] = await db.select().from(businessSearches)
+      .where(and(eq(businessSearches.id, req.params.id), eq(businessSearches.userId, userId(req))));
+    if (!search) return res.status(404).json({ message: "Search not found" });
+    if (isRunning(search.id)) return res.status(409).json({ message: "This search is still running." });
+    await resetForRecheck(search.id);
+    void runSearch(search.id);
+    res.json({ ok: true, creditsBefore: search.creditsUsed });
   });
 
   app.post("/api/business-search/:id/stop", isAdmin, async (req: any, res) => {

@@ -342,8 +342,9 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const [typeFilter, setTypeFilter] = useState("all");
   const [townFilter, setTownFilter] = useState("all");
   const [open, setOpen] = useState<string | null>(null);
+  const [recheckOpen, setRecheckOpen] = useState(false);
   const action = useMutation({
-    mutationFn: async (what: "stop" | "resume") => (await apiRequest("POST", `/api/business-search/${id}/${what}`)).json(),
+    mutationFn: async (what: "stop" | "resume" | "recheck") => (await apiRequest("POST", `/api/business-search/${id}/${what}`, what === "recheck" ? { confirm: true } : undefined)).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }),
     onError: e => toast({ title: "Didn't work", description: errorText(e), variant: "destructive" }),
   });
@@ -387,6 +388,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
           <div className="flex flex-wrap gap-2">
             {isAdmin && (s.status === "running" || s.status === "queued") && <Button size="sm" variant="outline" onClick={() => action.mutate("stop")}><Pause className="mr-2 h-4 w-4" />Stop</Button>}
             {isAdmin && (s.status === "stopped" || s.status === "failed") && <Button size="sm" onClick={() => action.mutate("resume")}><Play className="mr-2 h-4 w-4" />Resume</Button>}
+            {isAdmin && (s.status === "done" || s.status === "stopped" || s.status === "failed") && <Button size="sm" variant="outline" onClick={() => setRecheckOpen(true)}>Check again</Button>}
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=csv`}><Download className="mr-2 h-4 w-4" />CSV</a></Button>
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=xlsx`}><Download className="mr-2 h-4 w-4" />Excel</a></Button>
           </div>
@@ -397,6 +399,20 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={recheckOpen} onOpenChange={setRecheckOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Check these {s.businessesFound} businesses again?</DialogTitle>
+            <DialogDescription>Google Maps isn't searched again. Searches already made are reused for free; only new ones cost credits.</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm">At most <b>{s.businessesFound * (ordering ? 3 : 2)}</b> credits; usually far fewer. Credits used so far: {s.creditsUsed}.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecheckOpen(false)}>Cancel</Button>
+            <Button onClick={() => { setRecheckOpen(false); action.mutate("recheck"); }}>Yes, check again</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-wrap gap-2">
         <Select value={listFilter} onValueChange={setListFilter}>

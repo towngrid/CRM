@@ -194,6 +194,14 @@ function header(headers: PublicPageResponse["headers"], name: string): string | 
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** Thrown when allowRedirect refused a redirect; `target` is where it pointed. */
+export class RedirectRefused extends Error {
+  constructor(readonly target: string) {
+    super(`Redirect to ${target} not followed`);
+    this.name = "RedirectRefused";
+  }
+}
+
 export async function fetchPublicPage(
   input: string,
   options: {
@@ -205,6 +213,8 @@ export async function fetchPublicPage(
     runtime?: SalonFetchRuntime;
     requestBudget?: { used: number; max: number };
     allowedHosts?: string[];
+    /** Return false to refuse a redirect (e.g. to Facebook or a delivery app). */
+    allowRedirect?: (next: URL) => boolean;
   } = {},
 ): Promise<PublicPageResponse> {
   const runtime = options.runtime ?? {};
@@ -247,6 +257,9 @@ export async function fetchPublicPage(
       const next = new URL(location, current);
       if (options.allowedHosts && !options.allowedHosts.some(host => host.toLowerCase().replace(/^www\./, "") === next.hostname.toLowerCase().replace(/^www\./, ""))) {
         throw new Error("Website redirected outside the submitted site");
+      }
+      if (options.allowRedirect && !options.allowRedirect(next)) {
+        throw new RedirectRefused(next.href);
       }
       current = next;
       continue;

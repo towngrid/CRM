@@ -889,22 +889,6 @@ function extractContactDetails(rawText: string): ContactDetailResult {
   return { email, phone };
 }
 
-/** Helper: fetch a page URL and return its raw HTML (or null on failure) */
-async function fetchPageHtml(url: string, userAgent?: string): Promise<string | null> {
-  try {
-    const r = await fetch(url, {
-      headers: {
-        "User-Agent": userAgent ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      signal: AbortSignal.timeout(14000),
-    });
-    return r.ok ? await r.text() : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Helper: run a SerpAPI Google search and return result objects */
 async function serpSearch(serpKey: string, query: string, num = 5): Promise<any[]> {
   try {
@@ -948,12 +932,8 @@ const CONTACT_DETAIL_SOURCES: ContactDetailSource[] = [
       // Check snippet first (fastest)
       const snippetDetails = extractContactDetails(`${fbResult.title ?? ""} ${fbResult.snippet ?? ""}`);
       if (snippetDetails.email || snippetDetails.phone) return snippetDetails;
-      // Fetch the actual page (Facebook externalhit UA gets About section)
-      const html = await fetchPageHtml(
-        fbResult.link,
-        "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
-      );
-      return html ? extractContactDetails(html) : {};
+      // Search snippet only: never open Facebook pages from code.
+      return {};
     },
   },
 
@@ -966,8 +946,8 @@ const CONTACT_DETAIL_SOURCES: ContactDetailSource[] = [
       if (!yelpResult) return {};
       const snippetDetails = extractContactDetails(`${yelpResult.title ?? ""} ${yelpResult.snippet ?? ""}`);
       if (snippetDetails.email || snippetDetails.phone) return snippetDetails;
-      const html = await fetchPageHtml(yelpResult.link);
-      return html ? extractContactDetails(html) : {};
+      // Search snippet only: never open directory pages from code.
+      return {};
     },
   },
 
@@ -980,8 +960,8 @@ const CONTACT_DETAIL_SOURCES: ContactDetailSource[] = [
       if (!bbbResult) return {};
       const snippetDetails = extractContactDetails(`${bbbResult.title ?? ""} ${bbbResult.snippet ?? ""}`);
       if (snippetDetails.email || snippetDetails.phone) return snippetDetails;
-      const html = await fetchPageHtml(bbbResult.link);
-      return html ? extractContactDetails(html) : {};
+      // Search snippet only: never open directory pages from code.
+      return {};
     },
   },
 
@@ -994,8 +974,8 @@ const CONTACT_DETAIL_SOURCES: ContactDetailSource[] = [
       if (!ypResult) return {};
       const snippetDetails = extractContactDetails(`${ypResult.title ?? ""} ${ypResult.snippet ?? ""}`);
       if (snippetDetails.email || snippetDetails.phone) return snippetDetails;
-      const html = await fetchPageHtml(ypResult.link);
-      return html ? extractContactDetails(html) : {};
+      // Search snippet only: never open directory pages from code.
+      return {};
     },
   },
 ];

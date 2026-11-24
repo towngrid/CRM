@@ -46,6 +46,7 @@ import { registerSalonResearchRoutes } from "./salonResearch";
 import { rejectResearchExecution, isResearchDirectoryRow, RESEARCH_READ_ONLY } from "./salonResearchPolicy";
 import { pipelineEmailQueryScope } from "./pipelineEmailSummary";
 import { registerDealPlanRoutes, seedDealPlans } from "./dealPlanRoutes";
+import { registerBusinessSearchRoutes } from "./businessSearch/routes";
 import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE, getSerpApiKey } from "./appConfig";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
 import { DEAL_STAGE_VALUES, stageLabel } from "@shared/dealStages";
@@ -178,6 +179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerSalonResearchRoutes(app, isAuthenticated, isAdmin);
   await seedDealPlans();
   registerDealPlanRoutes(app, isAuthenticated, isAdmin);
+  registerBusinessSearchRoutes(app, isAuthenticated, isAdmin);
 
   // Helper function to get user ID or null for admin (admin sees all data)
   const getUserIdForQuery = (user: any): string | null => {
@@ -749,6 +751,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
             if (bbbResult?.link) {
               bbbUrl = bbbResult.link;
+              const snippet = [bbbResult.title, bbbResult.snippet].filter(Boolean).join(" ");
+              if (snippet.trim()) chunks.push({ text: snippet, source: "BBB (search snippet)", priority: 1 });
               console.log(`[OwnerDiscovery] BBB: found listing at ${bbbUrl}`);
             } else {
               console.log("[OwnerDiscovery] BBB: no /profile/ URL in search results");
@@ -757,22 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (e: any) {
           console.log(`[OwnerDiscovery] BBB search exception: ${e.message}`);
         }
-        if (!bbbUrl) return;
-        try {
-          const r = await fetch(bbbUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] BBB: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const text = stripHtml(html);
-          if (text.length > 30) {
-            chunks.push({ text, source: "BBB Listing", priority: 0 });
-            console.log(`[OwnerDiscovery] BBB: scraped ${text.length} chars`);
-          }
-        } catch (e: any) {
-          console.log(`[OwnerDiscovery] BBB scrape exception: ${e.message}`);
-        }
+        // Search snippet only: never open bbb pages from code (no-scraping rule).
       }
 
       async function collectYelp(): Promise<void> {
@@ -792,6 +781,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
             if (yelpResult?.link) {
               yelpUrl = yelpResult.link;
+              const snippet = [yelpResult.title, yelpResult.snippet].filter(Boolean).join(" ");
+              if (snippet.trim()) chunks.push({ text: snippet, source: "Yelp (search snippet)", priority: 1 });
               console.log(`[OwnerDiscovery] Yelp: found listing at ${yelpUrl}`);
             } else {
               console.log("[OwnerDiscovery] Yelp: no /biz/ URL in search results");
@@ -800,22 +791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (e: any) {
           console.log(`[OwnerDiscovery] Yelp search exception: ${e.message}`);
         }
-        if (!yelpUrl) return;
-        try {
-          const r = await fetch(yelpUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] Yelp: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const text = stripHtml(html);
-          if (text.length > 30) {
-            chunks.push({ text, source: "Yelp Listing", priority: 0 });
-            console.log(`[OwnerDiscovery] Yelp: scraped ${text.length} chars`);
-          }
-        } catch (e: any) {
-          console.log(`[OwnerDiscovery] Yelp scrape exception: ${e.message}`);
-        }
+        // Search snippet only: never open yelp pages from code (no-scraping rule).
       }
 
       async function collectFacebook(): Promise<void> {
@@ -840,23 +816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         } catch (e: any) { console.log(`[OwnerDiscovery] Facebook search exception: ${e.message}`); }
-        if (!fbUrl) return;
-        try {
-          const r = await fetch(fbUrl, {
-            headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] Facebook: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1] ||
-                          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] || "";
-          const pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || "";
-          const combined = `${ogTitle} ${pageTitle} ${extractMeta(html)} ${stripHtml(html).slice(0, 2000)}`.trim();
-          if (combined.length > 30) {
-            chunks.push({ text: combined, source: "Facebook Page", priority: 0 });
-            console.log(`[OwnerDiscovery] Facebook: scraped ${combined.length} chars (ogTitle: "${ogTitle}")`);
-          }
-        } catch (e: any) { console.log(`[OwnerDiscovery] Facebook scrape exception: ${e.message}`); }
+        // Search snippet only: never open fb pages from code (no-scraping rule).
       }
 
       async function collectNextdoor(): Promise<void> {
@@ -877,23 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else { console.log("[OwnerDiscovery] Nextdoor: no page found"); }
           }
         } catch (e: any) { console.log(`[OwnerDiscovery] Nextdoor search exception: ${e.message}`); }
-        if (!ndUrl) return;
-        try {
-          const r = await fetch(ndUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] Nextdoor: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1] ||
-                          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] || "";
-          const pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || "";
-          const combined = `${ogTitle} ${pageTitle} ${extractMeta(html)} ${stripHtml(html).slice(0, 2000)}`.trim();
-          if (combined.length > 30) {
-            chunks.push({ text: combined, source: "Nextdoor Page", priority: 0 });
-            console.log(`[OwnerDiscovery] Nextdoor: scraped ${combined.length} chars`);
-          }
-        } catch (e: any) { console.log(`[OwnerDiscovery] Nextdoor scrape exception: ${e.message}`); }
+        // Search snippet only: never open nd pages from code (no-scraping rule).
       }
 
       async function collectDailyGroomer(): Promise<void> {
@@ -914,23 +858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else { console.log("[OwnerDiscovery] Daily Groomer: no listing found"); }
           }
         } catch (e: any) { console.log(`[OwnerDiscovery] Daily Groomer search exception: ${e.message}`); }
-        if (!dgUrl) return;
-        try {
-          const r = await fetch(dgUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] Daily Groomer: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1] ||
-                          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] || "";
-          const pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || "";
-          const combined = `${ogTitle} ${pageTitle} ${extractMeta(html)} ${stripHtml(html).slice(0, 3000)}`.trim();
-          if (combined.length > 30) {
-            chunks.push({ text: combined, source: "The Daily Groomer", priority: 0 });
-            console.log(`[OwnerDiscovery] Daily Groomer: scraped ${combined.length} chars`);
-          }
-        } catch (e: any) { console.log(`[OwnerDiscovery] Daily Groomer scrape exception: ${e.message}`); }
+        // Search snippet only: never open dg pages from code (no-scraping rule).
       }
 
       async function collectThumbTack(): Promise<void> {
@@ -951,23 +879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else { console.log("[OwnerDiscovery] Thumbtack: no listing found"); }
           }
         } catch (e: any) { console.log(`[OwnerDiscovery] Thumbtack search exception: ${e.message}`); }
-        if (!ttUrl) return;
-        try {
-          const r = await fetch(ttUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] Thumbtack: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1] ||
-                          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] || "";
-          const pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || "";
-          const combined = `${ogTitle} ${pageTitle} ${extractMeta(html)} ${stripHtml(html).slice(0, 2500)}`.trim();
-          if (combined.length > 30) {
-            chunks.push({ text: combined, source: "Thumbtack Listing", priority: 0 });
-            console.log(`[OwnerDiscovery] Thumbtack: scraped ${combined.length} chars`);
-          }
-        } catch (e: any) { console.log(`[OwnerDiscovery] Thumbtack scrape exception: ${e.message}`); }
+        // Search snippet only: never open tt pages from code (no-scraping rule).
       }
 
       async function collectAngi(): Promise<void> {
@@ -988,23 +900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else { console.log("[OwnerDiscovery] Angi: no listing found"); }
           }
         } catch (e: any) { console.log(`[OwnerDiscovery] Angi search exception: ${e.message}`); }
-        if (!angiUrl) return;
-        try {
-          const r = await fetch(angiUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (!r.ok) { console.log(`[OwnerDiscovery] Angi: HTTP ${r.status}`); return; }
-          const html = await r.text();
-          const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1] ||
-                          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] || "";
-          const pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || "";
-          const combined = `${ogTitle} ${pageTitle} ${extractMeta(html)} ${stripHtml(html).slice(0, 2500)}`.trim();
-          if (combined.length > 30) {
-            chunks.push({ text: combined, source: "Angi Listing", priority: 0 });
-            console.log(`[OwnerDiscovery] Angi: scraped ${combined.length} chars`);
-          }
-        } catch (e: any) { console.log(`[OwnerDiscovery] Angi scrape exception: ${e.message}`); }
+        // Search snippet only: never open angi pages from code (no-scraping rule).
       }
 
       // ─────────────────────────────────────────────────────────────────────────

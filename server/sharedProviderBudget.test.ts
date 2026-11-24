@@ -114,7 +114,7 @@ test("unverified, insufficient and failed account reads cannot raise the shared 
 });
 
 test("saved budgets persist into a new month; invalid budgets fail rather than grant credit", () => {
-  assert.deepEqual(savedSerpBudget(), { monthlyQuota: 250, hardStopAt: 200 });
+  assert.deepEqual(savedSerpBudget(), { monthlyQuota: 1000, hardStopAt: 900 });
   assert.deepEqual(savedSerpBudget(APPROVED_SERP_BUDGET), APPROVED_SERP_BUDGET);
   for (const budget of [{ monthlyQuota: 0, hardStopAt: 200 }, { monthlyQuota: 1000, hardStopAt: 1001 },
     { monthlyQuota: 1000, hardStopAt: -1 }, { monthlyQuota: 1000.5, hardStopAt: 800 }]) {

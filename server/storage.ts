@@ -2857,7 +2857,7 @@ export class DatabaseStorage implements IStorage {
         queriesPerZip: 2,
         maxZipsPerRun: 3,
         maxRunsPerDay: 1,
-        maxSerpCallsPerHour: 5,
+        maxSerpCallsPerHour: 100,
         enableThirdQuery: "false",
         planType: "free"
       })

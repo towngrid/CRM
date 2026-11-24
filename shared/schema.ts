@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, index, uniqueIndex, jsonb, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -711,3 +711,76 @@ export const dealPlans = pgTable("deal_plans", {
   sortOrder: integer("sort_order").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Business Search (Step 3a). One row per search Seann runs (shared/businessSearch.ts).
+export const businessSearches = pgTable("business_searches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  businessType: text("business_type").notNull(), // BUSINESS_TYPES value or "other"
+  businessTypeOther: text("business_type_other"),
+  leadList: text("lead_list").notNull(), // get_seen, ordering
+  places: jsonb("places").notNull().$type<string[]>(), // zip codes or town names
+  pagesPerPlace: integer("pages_per_place").notNull().default(1),
+  status: text("status").notNull().default("queued"), // queued, running, done, stopped, failed
+  estimate: jsonb("estimate"), // CreditEstimate shown before it ran
+  creditsUsed: integer("credits_used").notNull().default(0), // SerpAPI calls billed by this search
+  cachedCalls: integer("cached_calls").notNull().default(0), // answered from the 30-day cache (free)
+  businessesFound: integer("businesses_found").notNull().default(0),
+  businessesChecked: integer("businesses_checked").notNull().default(0),
+  outsideArea: integer("outside_area").notNull().default(0),
+  duplicatesRemoved: integer("duplicates_removed").notNull().default(0),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+}, table => [index("business_searches_user_idx").on(table.userId, table.createdAt)]);
+
+// One row per business a search found, with its Pass 1 findings and lead type.
+export const businessLeads = pgTable("business_leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  searchId: varchar("search_id").notNull().references(() => businessSearches.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  name: text("name").notNull(),
+  address: text("address"),
+  town: text("town"),
+  zip: text("zip"),
+  phone: text("phone"),
+  rating: real("rating"),
+  reviewCount: integer("review_count"),
+  googleCategory: text("google_category"),
+  googleUrl: text("google_url"),
+  googlePlaceId: text("google_place_id"),
+  googleDataId: text("google_data_id"), // needed by Pass 2 (reviews, posts, photos)
+  websiteUrl: text("website_url"),
+  facebookUrl: text("facebook_url"),
+  instagramUrl: text("instagram_url"),
+  deliveryApps: text("delivery_apps"), // "DoorDash, Grubhub" (labels)
+  ownOrdering: text("own_ordering"), // yes, no, unknown, no_website
+  sendsToApps: text("sends_to_apps"), // yes, no, unknown, no_website
+  stillOpenFlag: boolean("still_open_flag").notNull().default(false),
+  googleStatus: text("google_status"), // open, permanently_closed, temporarily_closed, unknown
+  leadList: text("lead_list").notNull(),
+  leadType: text("lead_type"),
+  checkStatus: text("check_status").notNull().default("pending"), // pending, checked, failed
+  checkError: text("check_error"),
+  findings: jsonb("findings"), // website, social, ordering, stillOpen details (shared/businessSearch.ts)
+  mapsResult: jsonb("maps_result"), // the Google Maps result as SerpAPI returned it
+  // Seann's hand check of social accounts (never read from code)
+  handChecked: boolean("hand_checked").notNull().default(false),
+  facebookFollowers: integer("facebook_followers"),
+  instagramFollowers: integer("instagram_followers"),
+  lastPostDate: text("last_post_date"),
+  handCheckNotes: text("hand_check_notes"),
+  // Approval into Contacts and Pipeline
+  approvedAt: timestamp("approved_at"),
+  contactId: varchar("contact_id"),
+  dealId: varchar("deal_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  checkedAt: timestamp("checked_at"),
+}, table => [
+  index("business_leads_search_idx").on(table.searchId),
+  index("business_leads_user_idx").on(table.userId),
+]);
+
+export type BusinessSearch = typeof businessSearches.$inferSelect;
+export type BusinessLead = typeof businessLeads.$inferSelect;

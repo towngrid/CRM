@@ -18,27 +18,12 @@ import Inbox from "@/pages/inbox";
 import Settings from "@/pages/settings";
 import AdminUsers from "@/pages/admin-users";
 import AdminSequenceTest from "@/pages/admin-sequence-test";
-import LeadDiscovery from "@/pages/lead-discovery";
 import DealWorkspace from "@/pages/deal-workspace";
 import PayrollDetail from "@/pages/payroll-detail";
 import FormOutreach from "@/pages/form-outreach";
 import Leads from "@/pages/leads";
+import BusinessSearch from "@/pages/business-search";
 import Sidebar from "@/components/layout/sidebar";
-import { Link } from "wouter";
-import { ArrowLeft } from "lucide-react";
-
-function LeadsBusinessSearch() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
-        <Link href="/leads" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
-          <ArrowLeft className="h-4 w-4" />Back to saved Leads review
-        </Link>
-      </div>
-      <LeadDiscovery />
-    </div>
-  );
-}
 
 function LegacyEnrichmentRedirect() {
   const { id } = useParams<{ id?: string }>();
@@ -58,7 +43,7 @@ function LegacySearchReportRedirect() {
 
 function LegacyDiscoveryRedirect() {
   const [, setLocation] = useLocation();
-  useEffect(() => { setLocation("/leads/search"); }, [setLocation]);
+  useEffect(() => { setLocation("/search"); }, [setLocation]);
   return null;
 }
 
@@ -104,7 +89,8 @@ function Router() {
       <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         <Switch>
           <Route path="/" component={Dashboard} />
-          <Route path="/leads/search" component={LeadsBusinessSearch} />
+          <Route path="/search" component={BusinessSearch} />
+          <Route path="/leads/search" component={LegacyDiscoveryRedirect} />
           <Route path="/leads" component={Leads} />
           <Route path="/leads/:id" component={Leads} />
           <Route path="/lead-discovery" component={LegacyDiscoveryRedirect} />

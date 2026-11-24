@@ -1,0 +1,264 @@
+// Business Search API (Step 3a). Searches cost SerpAPI credits, so starting one is admin-only
+// and needs `confirm: true` after the screen has shown the estimate.
+import type { Express, RequestHandler } from "express";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import * as XLSX from "xlsx";
+import { db } from "../db";
+import { storage } from "../storage";
+import { businessLeads, businessSearches, type BusinessLead } from "@shared/schema";
+import {
+  BUSINESS_TYPES, OTHER_BUSINESS_TYPE, businessTypeLabel, estimateCredits, normalizePlace, townAndZip,
+} from "@shared/businessSearch";
+import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
+import { getSerpUsageStatus } from "../lead-discovery";
+import { createDealRecord } from "../dealCreation";
+import { getSerpApiKey } from "../appConfig";
+import { serpAccount } from "./serp";
+import { isRunning, markInterruptedSearches, runSearch } from "./runner";
+
+const searchInput = z.object({
+  businessType: z.string().refine(v => v === OTHER_BUSINESS_TYPE || BUSINESS_TYPES.some(t => t.value === v), "Pick a business type"),
+  businessTypeOther: z.string().max(60).optional().nullable(),
+  leadList: z.enum(["get_seen", "ordering"]),
+  places: z.array(z.string()).min(1, "Pick at least one town or zip code").max(200),
+  pagesPerPlace: z.number().int().min(1).max(3).default(1),
+});
+
+function cleanInput(body: unknown) {
+  const input = searchInput.parse(body);
+  const places = Array.from(new Set(input.places.map(normalizePlace).filter((p): p is string => !!p)));
+  if (places.length === 0) throw new z.ZodError([{ code: "custom", path: ["places"], message: "Pick at least one town or zip code" }]);
+  if (input.businessType === OTHER_BUSINESS_TYPE && !input.businessTypeOther?.trim()) {
+    throw new z.ZodError([{ code: "custom", path: ["businessTypeOther"], message: "Type the kind of business" }]);
+  }
+  return { ...input, places };
+}
+
+async function budget() {
+  const status = await getSerpUsageStatus();
+  return {
+    usedThisMonth: status.usage.usedCredits,
+    stopAt: status.usage.hardStopAt,
+    monthlyPlan: status.usage.monthlyQuota,
+    left: Math.max(0, status.usage.hardStopAt - status.usage.usedCredits),
+    perHour: status.config.maxSerpCallsPerHour,
+    keySet: !!getSerpApiKey(),
+  };
+}
+
+function userId(req: any): string {
+  return req.user.claims.sub;
+}
+
+// ── Table rows for the screen and the export ──────────────────────────────
+export function leadRow(lead: BusinessLead) {
+  const f = (lead.findings ?? {}) as any;
+  const noSocial = !lead.facebookUrl && !lead.instagramUrl;
+  return {
+    Name: lead.name,
+    Town: lead.town ?? "",
+    Zip: lead.zip ?? "",
+    Phone: lead.phone ?? "",
+    List: leadListLabel(lead.leadList),
+    "Lead type": leadTypeLabel(lead.leadType),
+    Website: lead.websiteUrl && f.website?.googleButton !== "social" ? lead.websiteUrl : "No Website found",
+    "Website check": f.website ? websiteSummary(f.website) : "",
+    Facebook: lead.facebookUrl ?? (noSocial ? "No social found" : "No Facebook found"),
+    Instagram: lead.instagramUrl ?? (noSocial ? "No social found" : "No Instagram found"),
+    "Social match": lead.facebookUrl || lead.instagramUrl ? "Likely match: check by hand" : "",
+    "Delivery apps": lead.deliveryApps ?? "",
+    "Sends customers to delivery apps from own site": yesNo(lead.sendsToApps),
+    "Takes orders on own site": yesNo(lead.ownOrdering) + (f.ordering?.ownOrderingPlatform ? ` (${f.ordering.ownOrderingPlatform})` : ""),
+    Rating: lead.rating ?? "",
+    Reviews: lead.reviewCount ?? "",
+    "Still open?": lead.stillOpenFlag ? `Check: ${(f.stillOpen?.reasons ?? []).join("; ")}` : "",
+    "Google AI summary": f.stillOpen?.aiSummary ?? "",
+    "Google listing": lead.googleUrl ?? "",
+    Address: lead.address ?? "",
+    Category: lead.googleCategory ?? "",
+  };
+}
+
+function yesNo(v: string | null): string {
+  return ({ yes: "Yes", no: "No", unknown: "Unknown", no_website: "No website" } as Record<string, string>)[v ?? ""] ?? "";
+}
+
+function websiteSummary(w: any): string {
+  if (!w.url) return "No website found";
+  if (w.googleButton === "social") return "Google's Website button goes to Facebook/Instagram";
+  if (w.googleButton === "ordering_site") return `Website is an ordering page (${w.ownedByOrderingCompany ?? "ordering company"})`;
+  const parts: string[] = [];
+  parts.push(w.loads === "yes" ? "loads" : w.loads === "no" ? "doesn't load" : "couldn't check (site blocks robots)");
+  if (w.copyrightYear) parts.push(`© ${w.copyrightYear}`);
+  if (w.loads === "yes") parts.push(w.phoneFriendly === "yes" ? "phone-friendly" : "not phone-friendly");
+  if (w.contactForm === "yes") parts.push("contact form");
+  if (w.builder) parts.push(w.builder);
+  if (w.ownedByOrderingCompany) parts.push(`built by ${w.ownedByOrderingCompany}`);
+  if (w.source === "search") parts.push("found by web search");
+  return parts.join(", ");
+}
+
+export function registerBusinessSearchRoutes(app: Express, isAuthenticated: RequestHandler, isAdmin: RequestHandler) {
+  markInterruptedSearches().catch(error => console.error("[BusinessSearch] Could not mark interrupted searches:", error));
+
+  app.get("/api/business-search/budget", isAuthenticated, async (_req, res) => {
+    try {
+      res.json({ budget: await budget(), serpapi: await serpAccount() });
+    } catch (error) {
+      res.status(500).json({ message: "Could not read the search budget" });
+    }
+  });
+
+  // Free: shows the credit estimate before anything runs.
+  app.post("/api/business-search/estimate", isAuthenticated, async (req, res) => {
+    try {
+      const input = cleanInput(req.body);
+      res.json({ places: input.places, estimate: estimateCredits(input.places.length, input.pagesPerPlace, input.leadList), budget: await budget() });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: error.issues[0]?.message ?? "Check the form" });
+      res.status(500).json({ message: "Could not estimate" });
+    }
+  });
+
+  app.post("/api/business-search", isAdmin, async (req: any, res) => {
+    try {
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the credit estimate first." });
+      const input = cleanInput(req.body);
+      const estimate = estimateCredits(input.places.length, input.pagesPerPlace, input.leadList);
+      const b = await budget();
+      if (!b.keySet) return res.status(400).json({ message: "SERPAPI_KEY is not set in Railway." });
+      if (estimate.likely > b.left) {
+        return res.status(400).json({ message: `This search likely needs about ${estimate.likely} credits but only ${b.left} are left before this month's stop.` });
+      }
+      const [search] = await db.insert(businessSearches).values({
+        userId: userId(req), businessType: input.businessType, businessTypeOther: input.businessTypeOther?.trim() || null,
+        leadList: input.leadList, places: input.places, pagesPerPlace: input.pagesPerPlace, estimate,
+      }).returning();
+      void runSearch(search.id);
+      res.json(search);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: error.issues[0]?.message ?? "Check the form" });
+      console.error("[BusinessSearch] start failed:", error);
+      res.status(500).json({ message: "Could not start the search" });
+    }
+  });
+
+  app.get("/api/business-search", isAuthenticated, async (req: any, res) => {
+    const rows = await db.select().from(businessSearches).where(eq(businessSearches.userId, userId(req)))
+      .orderBy(desc(businessSearches.createdAt)).limit(50);
+    res.json(rows.map(r => ({ ...r, label: businessTypeLabel(r.businessType, r.businessTypeOther), running: isRunning(r.id) })));
+  });
+
+  app.get("/api/business-search/:id", isAuthenticated, async (req: any, res) => {
+    const [search] = await db.select().from(businessSearches)
+      .where(and(eq(businessSearches.id, req.params.id), eq(businessSearches.userId, userId(req))));
+    if (!search) return res.status(404).json({ message: "Search not found" });
+    const leads = await db.select().from(businessLeads).where(eq(businessLeads.searchId, search.id)).orderBy(asc(businessLeads.createdAt));
+    res.json({
+      search: { ...search, label: businessTypeLabel(search.businessType, search.businessTypeOther), running: isRunning(search.id) },
+      leads: leads.map(({ mapsResult: _raw, ...lead }) => lead),
+    });
+  });
+
+  app.post("/api/business-search/:id/resume", isAdmin, async (req: any, res) => {
+    const [search] = await db.select().from(businessSearches)
+      .where(and(eq(businessSearches.id, req.params.id), eq(businessSearches.userId, userId(req))));
+    if (!search) return res.status(404).json({ message: "Search not found" });
+    if (isRunning(search.id)) return res.json({ ok: true });
+    await db.update(businessSearches).set({ status: "running", errorMessage: null }).where(eq(businessSearches.id, search.id));
+    void runSearch(search.id);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/business-search/:id/stop", isAdmin, async (req: any, res) => {
+    await db.update(businessSearches).set({ status: "stopped", errorMessage: "Stopped by you. Press Resume to finish." })
+      .where(and(eq(businessSearches.id, req.params.id), eq(businessSearches.userId, userId(req))));
+    res.json({ ok: true });
+  });
+
+  app.get("/api/business-search/:id/export", isAuthenticated, async (req: any, res) => {
+    const [search] = await db.select().from(businessSearches)
+      .where(and(eq(businessSearches.id, req.params.id), eq(businessSearches.userId, userId(req))));
+    if (!search) return res.status(404).json({ message: "Search not found" });
+    const leads = await db.select().from(businessLeads).where(eq(businessLeads.searchId, search.id)).orderBy(asc(businessLeads.createdAt));
+    const rows = leads.map(leadRow);
+    const name = `${businessTypeLabel(search.businessType, search.businessTypeOther)} ${search.places.join(" ")}`.replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "-").slice(0, 60) || "search";
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    if (req.query.format === "xlsx") {
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, "Businesses");
+      const buffer = XLSX.write(book, { type: "buffer", bookType: "xlsx" });
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${name}.xlsx"`);
+      return res.send(buffer);
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${name}.csv"`);
+    res.send("﻿" + XLSX.utils.sheet_to_csv(sheet));
+  });
+
+  // Seann's hand check of the social accounts (never read from code).
+  const handCheck = z.object({
+    handChecked: z.boolean().optional(),
+    facebookFollowers: z.number().int().min(0).nullable().optional(),
+    instagramFollowers: z.number().int().min(0).nullable().optional(),
+    lastPostDate: z.string().max(40).nullable().optional(),
+    handCheckNotes: z.string().max(2000).nullable().optional(),
+  });
+  app.patch("/api/business-search/leads/:id", isAuthenticated, async (req: any, res) => {
+    const parsed = handCheck.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Check the values" });
+    const [lead] = await db.update(businessLeads).set(parsed.data)
+      .where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req)))).returning();
+    if (!lead) return res.status(404).json({ message: "Business not found" });
+    res.json(lead);
+  });
+
+  // Seann approves a business: it becomes a contact and a deal at the first pipeline stage.
+  app.post("/api/business-search/leads/:id/approve", isAuthenticated, async (req: any, res) => {
+    try {
+      const [lead] = await db.select().from(businessLeads)
+        .where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req))));
+      if (!lead) return res.status(404).json({ message: "Business not found" });
+      if (lead.contactId) return res.json({ contactId: lead.contactId, dealId: lead.dealId, already: true });
+      const row = leadRow(lead);
+      const street = lead.address ? lead.address.split(",")[0]?.trim() : null;
+      const { town, zip } = townAndZip(lead.address);
+      const notes = [
+        `From Business Search (${new Date().toISOString().slice(0, 10)}).`,
+        `Website: ${row["Website check"] || row.Website}`,
+        lead.deliveryApps ? `Delivery apps: ${lead.deliveryApps}` : null,
+        row["Takes orders on own site"] ? `Takes orders on own site: ${row["Takes orders on own site"]}` : null,
+        lead.rating != null ? `Google: ${lead.rating} stars, ${lead.reviewCount ?? 0} reviews` : null,
+        lead.googleUrl ? `Google listing: ${lead.googleUrl}` : null,
+        lead.stillOpenFlag ? `Still open? ${row["Still open?"]}` : null,
+      ].filter(Boolean).join("\n");
+      const contact = await storage.createContact({
+        company: lead.name,
+        useBusinessNameForEmail: "Yes",
+        phone: lead.phone,
+        phoneWork: lead.phone,
+        address: street,
+        city: town ?? lead.town,
+        state: "NY",
+        zipCode: zip ?? lead.zip,
+        leadList: lead.leadList,
+        leadType: lead.leadType,
+        hasWebsite: row.Website === "No Website found" ? "No" : "Yes",
+        websiteUrl: row.Website === "No Website found" ? null : lead.websiteUrl,
+        facebookUrl: lead.facebookUrl,
+        instagramHandle: lead.instagramUrl,
+        leadSource: "Google Search",
+        notes,
+        status: "active",
+      } as any, userId(req));
+      const deal = await createDealRecord(db, { title: lead.name, contactId: contact.id } as any, userId(req));
+      await db.update(businessLeads).set({ approvedAt: new Date(), contactId: contact.id, dealId: deal.id }).where(eq(businessLeads.id, lead.id));
+      res.json({ contactId: contact.id, dealId: deal.id });
+    } catch (error) {
+      console.error("[BusinessSearch] approve failed:", error);
+      res.status(500).json({ message: "Could not add this business to Contacts" });
+    }
+  });
+}

@@ -14,7 +14,7 @@ export function serpMonthYear(now = new Date()) {
 
 /** A new calendar month inherits the last saved budget, never a provider counter. */
 export function savedSerpBudget(previous?: { monthlyQuota: number; hardStopAt: number }) {
-  const budget = previous ?? { monthlyQuota: 250, hardStopAt: 200 };
+  const budget = previous ?? { monthlyQuota: 1000, hardStopAt: 900 }; // TownGrid SerpAPI Starter plan (Nov 23)
   if (!Number.isSafeInteger(budget.monthlyQuota) || budget.monthlyQuota < 1 ||
       !Number.isSafeInteger(budget.hardStopAt) || budget.hardStopAt < 1 ||
       budget.hardStopAt > budget.monthlyQuota) {

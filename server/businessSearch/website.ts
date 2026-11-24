@@ -42,7 +42,9 @@ function hrefs(html: string, base: string): { url: string; text: string }[] {
 
 // Links that are page code or the website builder's own account, not the business's page.
 const SOCIAL_JUNK = /^\/(2008\/fbml|wix|wixcom|squarespace|godaddy|weebly|bentobox|getbento|spothopper|popmenu|toasttab|toast|wordpress|wordpressdotcom|shopify|duda|webflow|elementor|yoast|popular|tags)(\/|$)/i;
-const SOCIAL_SKIP = /\/(sharer|share|plugins|dialog|tr|intent|hashtag|p|reel|reels|explore|accounts|watch|embed|pin\/create)(\/|\?|$)|[?&](u|url)=/i;
+// Share buttons, posts, events, photos: not the business's own page. ("/p/" is a Facebook page
+// address but an Instagram post, so it is only skipped for Instagram; see socialLinksIn.)
+const SOCIAL_SKIP = /\/(sharer|share|plugins|dialog|tr|intent|hashtag|reel|reels|explore|accounts|watch|embed|pin\/create|events|groups|photos|videos|posts|story\.php|permalink\.php)(\/|\?|$)|[?&](u|url)=/i;
 
 export function socialLinksIn(html: string, pageUrl: string): Partial<Record<SocialKey, FoundLink>> {
   const found: Partial<Record<SocialKey, FoundLink>> = {};
@@ -53,6 +55,7 @@ export function socialLinksIn(html: string, pageUrl: string): Partial<Record<Soc
     if (!site || found[site.key]) continue;
     const path = new URL(url).pathname;
     if (path === "/" || path === "" || SOCIAL_JUNK.test(path) || SOCIAL_SKIP.test(new URL(url).pathname + new URL(url).search)) continue;
+    if (site.key === "instagram" && /^\/p\//i.test(path)) continue;
     found[site.key] = { url, page: pageUrl };
   }
   return found;

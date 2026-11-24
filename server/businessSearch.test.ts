@@ -47,7 +47,10 @@ test("lessons from the Glen Cove test (Nov 24)", () => {
   // "Ave" must not match "Avenue": Forest Ave Grill is not Forest Avenue Pizza.
   assert.ok(!resultMatchesBusiness({ title: "Forest Avenue Pizza - Glen Cove - Grubhub", link: "https://www.grubhub.com/restaurant/forest-avenue-pizza-90-forest-ave-glen-cove/1" },
     { name: "Forest Ave Grill", town: "Glen Cove" }));
+  assert.ok(!resultMatchesBusiness({ title: "Forest Avenue Pizza Delivery Menu - Glen Cove", snippet: "Order from 90 Forest Ave, Glen Cove" },
+    { name: "Forest Ave Grill", town: "Glen Cove" }));
   assert.ok(resultMatchesBusiness({ title: "Green Eats - Glen Cove", link: "https://greeneatsli.com" }, { name: "Green Eats", town: "Glen Cove" }));
+  assert.equal(socialLinksIn(`<a href="https://www.facebook.com/events/capri-246/27497/">x</a>`, "https://x.example/").facebook, undefined);
   // Page code and the builder's own account aren't the business's Facebook.
   const html = `<html xmlns:fb="http://www.facebook.com/2008/fbml"><a href="https://www.facebook.com/wix">Wix</a>
     <a href="https://www.instagram.com/popular/american-cafe-glen-cove/">x</a><a href="https://www.facebook.com/RealPlace">fb</a></html>`;

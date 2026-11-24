@@ -334,10 +334,11 @@ export function resultMatchesBusiness(
   const townWords = new Set(nameTokens(business.town ?? ""));
   const allTokens = nameTokens(business.name);
   const tokens = allTokens.filter(t => !townWords.has(t)).length ? allTokens.filter(t => !townWords.has(t)) : allTokens;
-  const squashed = `${shown} ${link}`.replace(/[^a-z0-9]/g, "");
-  // Whole words from the title and snippet only: a link can hold a street address ("90-forest-ave"),
-  // and "ave" must not match "avenue". Long words may also match inside a URL ("greeneatsli").
-  const words = new Set(shown.split(/[^a-z0-9]+/).filter(Boolean));
+  // The name must be in the title: snippets and links often hold a street address ("90 Forest Ave"),
+  // and "ave" must not match "avenue". Long words may also match inside the result's URL ("greeneatsli").
+  const title = (result.title ?? "").toLowerCase().replace(/['’]/g, "");
+  const squashed = `${title} ${link}`.replace(/[^a-z0-9]/g, "");
+  const words = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
   const hit = (t: string) => words.has(t) || (t.length >= 5 && squashed.includes(t));
   const nameOk = tokens.length === 0
     ? squashed.includes(business.name.toLowerCase().replace(/[^a-z0-9]/g, ""))

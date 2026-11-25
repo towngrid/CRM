@@ -45,6 +45,17 @@ test("old website, not phone-friendly, run by Slice, few reviews", () => {
   assert.match(reasonsText(r.reasons), /\+15 website © 2019, not phone-friendly/);
 });
 
+test("'website run by the ordering company' is only Slice/ChowNow/Owner.com-type sites", () => {
+  // Kiko Ramen: Google's Website button is a Toast order page = no website, no extra +10.
+  const kiko = scoreLead(base({ findings: { website: { url: "https://order.toasttab.com/x", googleButton: "ordering_site", ownedByOrderingCompany: "Toast" }, social: {} } }), points);
+  assert.ok(!keys(kiko).includes("ordering_company_website"));
+  assert.ok(keys(kiko).includes("no_website"));
+  // Tocolo: BentoBox is a website builder, not an ordering company.
+  const site = (owner: string) => ({ website: { url: "https://x.example", googleButton: "ok", loads: "yes", phoneFriendly: "yes", ownedByOrderingCompany: owner }, social: { facebookUrl: "f" } });
+  assert.ok(!keys(scoreLead(base({ findings: site("BentoBox") }), points)).includes("ordering_company_website"));
+  assert.ok(keys(scoreLead(base({ findings: site("Owner.com") }), points)).includes("ordering_company_website"));
+});
+
 test("restaurants get ordering points on top of Get Seen points (Seann, Nov 24)", () => {
   const r = scoreLead(base({
     leadList: "ordering",

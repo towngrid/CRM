@@ -119,7 +119,13 @@ export function scoreLead(input: ScoreInput, points: ScorePoint[]): ScoreResult 
     if (w.loads === "yes" && w.phoneFriendly === "no") why.push("not phone-friendly");
     if (why.length) add("old_website", `website ${why.join(", ")}`);
   }
-  if (w.ownedByOrderingCompany) add("ordering_company_website", `website run by ${w.ownedByOrderingCompany}`);
+  // Only a real website built and run by an ordering company (Slice, ChowNow, Owner.com, Menufy, BeyondMenu).
+  // Not a Toast/DoorDash order page standing in for a website (that's "no website"), and not website
+  // builders like BentoBox or Popmenu.
+  const siteOwners = ORDERING_SERVICES.filter(s => s.buildsWebsites).map(s => s.label);
+  if (hasSite && w.ownedByOrderingCompany && siteOwners.includes(w.ownedByOrderingCompany)) {
+    add("ordering_company_website", `website run by ${w.ownedByOrderingCompany}`);
+  }
   if (input.top3AverageReviews != null && input.top3AverageReviews > 0 && (input.reviewCount ?? 0) < input.top3AverageReviews / 2) {
     add("few_reviews", `${input.reviewCount ?? 0} reviews vs ${Math.round(input.top3AverageReviews)} for the top 3`);
   }

@@ -216,3 +216,27 @@ test("the contact page is read first, and its emails are collected", async () =>
   assert.equal(opened[1], "https://joes.example/contact-us");
   assert.deepEqual(result.website.emails?.map(e => [e.email, e.page]), [["hello@joes.example", "https://joes.example/contact-us"]]);
 });
+
+test("email steps: snippets, best-email order, and AI answers kept only when a source shows them", async () => {
+  const { emailsInPlainText } = await import("./businessSearch/website");
+  const { keepCitedEmails } = await import("./businessSearch/emailFinder");
+  const { allEmails, bestEmail } = await import("@shared/businessSearch");
+  // A Facebook page's contact line in Google's snippet (Facebook itself is never opened).
+  assert.deepEqual(emailsInPlainText("Cafe Nico's · Glen Cove, NY · cafenicos221@gmail.com · (516) 555-0199"), ["cafenicos221@gmail.com"]);
+  assert.deepEqual(emailsInPlainText("Write to info [at] joes.com"), ["info@joes.com"]);
+  assert.deepEqual(emailsInPlainText("Join us for dinner at joes.com tonight"), [], "plain ' at ' is never turned into an address");
+  // Your own entry wins, then the website, then search results, then AI.
+  const findings = {
+    website: { emails: [{ email: "info@joes.example", page: "https://joes.example/contact" }] },
+    searchEmails: [{ email: "joes@gmail.com", url: "https://facebook.com/joes", title: "Joe's" }],
+    emailLookup: { ai: { at: "x", model: "m", emails: [{ email: "ai@joes.example", url: "u", quote: "q" }], rejected: [], costUsd: 0.05 } },
+  };
+  assert.deepEqual(allEmails(findings).map(e => e.kind), ["website", "search_snippet", "ai_search"]);
+  assert.equal(bestEmail({ ...findings, emailLookup: { hand: { email: "owner@joes.example", at: "x" } } })?.kind, "hand");
+  assert.equal(bestEmail({}), null);
+  // AI: kept only when a cited source shows the exact address.
+  const quotes = [{ url: "https://facebook.com/joes", quote: "Joe's Pizza Glen Cove · joespizzagc@gmail.com · Pizza place" }];
+  assert.deepEqual(keepCitedEmails("EMAIL: joespizzagc@gmail.com", quotes).emails.map(e => e.email), ["joespizzagc@gmail.com"]);
+  assert.deepEqual(keepCitedEmails("EMAIL: info@joespizza.com", quotes), { emails: [], rejected: ["info@joespizza.com"] }, "a guessed address is thrown away");
+  assert.deepEqual(keepCitedEmails("EMAIL: NONE", quotes), { emails: [], rejected: [] });
+});

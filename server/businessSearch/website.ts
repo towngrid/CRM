@@ -126,6 +126,17 @@ export function emailsIn(html: string, pageUrl: string, siteHost: string | null)
   return Array.from(found.values());
 }
 
+/** Emails written in plain text (a search result's title/snippet, an AI source quote), junk removed. */
+export function emailsInPlainText(text: string): string[] {
+  const out: string[] = [];
+  // "info [at] joes.com" is written that way on purpose; plain " at " is not (it would turn "dinner at joes.com" into an address).
+  for (const m of Array.from(text.replace(/\s*\[at\]\s*|\s*\(at\)\s*/gi, "@").matchAll(EMAIL_RE))) {
+    const e = cleanEmail(m[0]);
+    if (e && !out.includes(e)) out.push(e);
+  }
+  return out;
+}
+
 /** Best first: on their own web address, then a mailto link, then the rest. */
 export function sortEmails(emails: FoundEmail[]): FoundEmail[] {
   const rank = (e: FoundEmail) => (e.ownDomain ? 0 : 2) + (e.how === "text" ? 1 : 0) + (/^(info|contact|hello|orders?|catering|events)@/.test(e.email) ? 0 : 0.5);

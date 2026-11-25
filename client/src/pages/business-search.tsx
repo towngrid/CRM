@@ -16,7 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
-  BUSINESS_TYPES, LONG_ISLAND_ZIPS, OTHER_BUSINESS_TYPE, defaultListFor, townForZip, type CreditEstimate,
+  AI_EMAIL_TYPICAL_COST_USD, BUSINESS_TYPES, LONG_ISLAND_ZIPS, OTHER_BUSINESS_TYPE, allEmails, defaultListFor, townForZip,
+  type CreditEstimate, type EmailLookup,
 } from "@shared/businessSearch";
 import { LEAD_LISTS, LEAD_TYPES, leadListLabel, leadTypeLabel, type LeadList } from "@shared/leadTypes";
 import { ArrowLeft, ChevronDown, ChevronRight, Download, ExternalLink, Pause, Play, Search, X } from "lucide-react";
@@ -27,7 +28,68 @@ type SearchRow = {
   id: string; label: string; businessType: string; leadList: string; places: string[]; pagesPerPlace: number; status: string;
   estimate: CreditEstimate | null; creditsUsed: number; cachedCalls: number; businessesFound: number; businessesChecked: number;
   outsideArea: number; duplicatesRemoved: number; alreadyFound: number; errorMessage: string | null; createdAt: string; finishedAt: string | null; running: boolean;
+  emailJob?: { running: boolean; total: number; done: number; found: number; aiCostUsd: number; note: string | null } | null;
 };
+
+type FindEmailsEstimate = {
+  businesses: number; serpCreditsMax: number; aiLookupsMax: number; aiCostMaxUsd: number; aiAvailable: boolean;
+  aiSpentThisMonthUsd: number; aiCapUsd: number; budget: Budget;
+};
+
+/** "Find missing emails": pick tiers, see the cost, confirm. Free steps already ran in the search. */
+function FindEmailsDialog({ searchId, open, onOpenChange }: { searchId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { toast } = useToast();
+  const [tiers, setTiers] = useState<string[]>(["A", "B"]);
+  const [useAi, setUseAi] = useState(true);
+  const { data: est } = useQuery<FindEmailsEstimate>({
+    queryKey: ["find-emails-estimate", searchId, tiers.join(","), useAi],
+    queryFn: async () => (await apiRequest("POST", `/api/business-search/${searchId}/find-emails/estimate`, { tiers, useAi })).json(),
+    enabled: open && tiers.length > 0,
+  });
+  const start = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/business-search/${searchId}/find-emails`, { confirm: true, tiers, useAi })).json(),
+    onSuccess: () => { onOpenChange(false); queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }); },
+    onError: e => toast({ title: "Didn't start", description: errorText(e), variant: "destructive" }),
+  });
+  const toggle = (t: string) => setTiers(tiers.includes(t) ? tiers.filter(x => x !== t) : [...tiers, t]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Find missing emails?</DialogTitle>
+          <DialogDescription>
+            Their websites and the search results we already have were checked for free. For each business still missing an email:
+            1) one Google "email" search (1 SerpAPI credit); 2) only if still missing, an AI web search. An AI answer is kept only when a source it cites shows the email. It stops at the first email found.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="flex flex-wrap items-center gap-4">
+            <span>Tiers:</span>
+            {["A", "B", "C"].map(t => (
+              <label key={t} className="flex items-center gap-1.5"><Checkbox checked={tiers.includes(t)} onCheckedChange={() => toggle(t)} />{t}</label>
+            ))}
+            <label className="flex items-center gap-1.5"><Checkbox checked={useAi} onCheckedChange={v => setUseAi(v === true)} />Use AI step</label>
+          </div>
+          {est && (
+            <>
+              <p><b>{est.businesses}</b> businesses without an email.</p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Email search: at most <b>{est.serpCreditsMax}</b> SerpAPI credits ({est.budget.left} left this month).</li>
+                {useAi && (est.aiAvailable
+                  ? <li>AI search: at most <b>{est.aiLookupsMax}</b> lookups, about <b>${est.aiCostMaxUsd.toFixed(2)}</b> (usually less: it only runs where the email search found nothing). This month: ${est.aiSpentThisMonthUsd.toFixed(2)} of the ${est.aiCapUsd} cap.</li>
+                  : <li className="text-amber-700 dark:text-amber-400">AI step is off: the crm service has no ANTHROPIC_API_KEY variable yet.</li>)}
+              </ul>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => start.mutate()} disabled={start.isPending || !est || est.businesses === 0}>Yes, find emails</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 type Lead = {
   id: string; name: string; address: string | null; town: string | null; zip: string | null; phone: string | null;
   rating: number | null; reviewCount: number | null; googleCategory: string | null; googleUrl: string | null;
@@ -236,12 +298,65 @@ function LinkOr({ url, empty }: { url: string | null; empty: string }) {
 }
 
 function emailCell(l: Lead) {
-  const emails = l.findings?.website?.emails as { email: string; page: string }[] | undefined;
-  if (emails?.length) {
-    return <span className="whitespace-nowrap"><a href={`mailto:${emails[0].email}`} className="text-primary hover:underline" onClick={e => e.stopPropagation()}>{emails[0].email}</a>{emails.length > 1 && <span className="text-muted-foreground"> +{emails.length - 1}</span>}</span>;
+  const emails = allEmails(l.findings);
+  if (emails.length) {
+    return (
+      <span className="whitespace-nowrap" title={emails[0].label}>
+        <a href={`mailto:${emails[0].email}`} className="text-primary hover:underline" onClick={e => e.stopPropagation()}>{emails[0].email}</a>
+        {emails[0].kind === "ai_search" && <Badge variant="outline" className="ml-1 text-[10px]">AI</Badge>}
+        {emails.length > 1 && <span className="text-muted-foreground"> +{emails.length - 1}</span>}
+      </span>
+    );
   }
   if (l.findings?.website?.contactForm === "yes") return <span className="text-muted-foreground">Contact form only</span>;
   return <span className="text-muted-foreground">No email found</span>;
+}
+
+/** Every email with where it came from, the paid steps tried, and "Find email" for this business. */
+function EmailPanel({ lead, isAdmin }: { lead: Lead; isAdmin: boolean }) {
+  const { toast } = useToast();
+  const [asking, setAsking] = useState(false);
+  const emails = allEmails(lead.findings);
+  const lookup = (lead.findings?.emailLookup ?? {}) as EmailLookup;
+  const find = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/business-search/leads/${lead.id}/find-email`, { confirm: true })).json(),
+    onSuccess: (r: { email: string | null; how: string; aiCostUsd: number }) => {
+      setAsking(false);
+      toast({ title: r.email ? `Found ${r.email}` : "No email found", description: `${r.how}${r.aiCostUsd ? ` · AI cost $${r.aiCostUsd.toFixed(2)}` : ""}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/business-search"] });
+    },
+    onError: e => { setAsking(false); toast({ title: "Didn't work", description: errorText(e), variant: "destructive" }); },
+  });
+  const tried = [
+    lookup.emailSearch ? `email search ${new Date(lookup.emailSearch.at).toLocaleDateString()} (${lookup.emailSearch.emails.length ? "found" : "nothing"})` : null,
+    lookup.ai ? `AI search ${new Date(lookup.ai.at).toLocaleDateString()} (${lookup.ai.emails.length ? "found" : "nothing"}, $${lookup.ai.costUsd.toFixed(2)})` : null,
+  ].filter(Boolean);
+  return (
+    <div className="space-y-1 md:col-span-2">
+      <h4 className="font-semibold">Email</h4>
+      {emails.length ? (
+        <ul className="space-y-0.5">
+          {emails.map(e => (
+            <li key={e.email}>
+              <a href={`mailto:${e.email}`} className="text-primary hover:underline">{e.email}</a>{" "}
+              <span className="text-muted-foreground">({e.label}{e.url ? <>: <a href={e.url} target="_blank" rel="noreferrer" className="hover:underline">source</a></> : ""})</span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-muted-foreground">No email found on their website or in search results yet.</p>}
+      {lookup.ai?.rejected?.length ? <p className="text-xs text-muted-foreground">AI also suggested {lookup.ai.rejected.join(", ")}, but no source showed it, so it wasn't kept.</p> : null}
+      {tried.length > 0 && <p className="text-xs text-muted-foreground">Already tried: {tried.join(" · ")}</p>}
+      {isAdmin && !emails.length && (!lookup.emailSearch || !lookup.ai) && (
+        asking ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Uses up to 1 SerpAPI credit, then (only if still missing) about ${AI_EMAIL_TYPICAL_COST_USD.toFixed(2)} of AI search. Go ahead?</span>
+            <Button size="sm" onClick={() => find.mutate()} disabled={find.isPending}>{find.isPending ? "Looking…" : "Yes, find it"}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAsking(false)} disabled={find.isPending}>Cancel</Button>
+          </div>
+        ) : <Button size="sm" variant="outline" onClick={() => setAsking(true)}>Find email</Button>
+      )}
+    </div>
+  );
 }
 
 function websiteCell(l: Lead) {
@@ -297,13 +412,14 @@ function ScorePanel({ lead }: { lead: Lead }) {
   );
 }
 
-function Details({ lead }: { lead: Lead }) {
+function Details({ lead, isAdmin }: { lead: Lead; isAdmin: boolean }) {
   const { toast } = useToast();
   const f = lead.findings ?? {};
   const w = f.website, s = f.social, o = f.ordering, open = f.stillOpen;
   const [hand, setHand] = useState({
     handChecked: lead.handChecked, facebookFollowers: lead.facebookFollowers?.toString() ?? "", instagramFollowers: lead.instagramFollowers?.toString() ?? "",
     lastPostDate: lead.lastPostDate ?? "", handCheckNotes: lead.handCheckNotes ?? "",
+    email: (f.emailLookup as EmailLookup | undefined)?.hand?.email ?? "",
   });
   const save = useMutation({
     mutationFn: async () => (await apiRequest("PATCH", `/api/business-search/leads/${lead.id}`, {
@@ -311,6 +427,7 @@ function Details({ lead }: { lead: Lead }) {
       facebookFollowers: hand.facebookFollowers ? Number(hand.facebookFollowers) : null,
       instagramFollowers: hand.instagramFollowers ? Number(hand.instagramFollowers) : null,
       lastPostDate: hand.lastPostDate || null, handCheckNotes: hand.handCheckNotes || null,
+      email: hand.email.trim(),
     })).json(),
     onSuccess: () => { toast({ title: "Saved" }); queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }); },
     onError: e => toast({ title: "Not saved", description: errorText(e), variant: "destructive" }),
@@ -325,6 +442,7 @@ function Details({ lead }: { lead: Lead }) {
   return (
     <div className="grid gap-4 bg-muted/40 p-4 text-sm md:grid-cols-2">
       <ScorePanel lead={lead} />
+      <EmailPanel lead={lead} isAdmin={isAdmin} />
       <div className="space-y-1">
         <h4 className="font-semibold">Website</h4>
         {!w?.url ? <p>No website found{w?.source === "none" ? " (Google lists none; one web search found no match)" : ""}.</p> : (
@@ -339,9 +457,6 @@ function Details({ lead }: { lead: Lead }) {
             {w.builder && <li>Built with: {w.builder}</li>}
             {w.ownedByOrderingCompany && <li>Website owned by the ordering company: {w.ownedByOrderingCompany}</li>}
             {w.pagesRead?.length > 0 && <li className="text-muted-foreground">Pages read: {w.pagesRead.length}</li>}
-            {w.emails?.length > 0
-              ? w.emails.map((e: any) => <li key={e.email}>Email: <a href={`mailto:${e.email}`} className="text-primary hover:underline">{e.email}</a> <span className="text-muted-foreground">({e.how === "mailto" ? "email link" : e.how === "protected" ? "hidden email" : "written"} on <a href={e.page} target="_blank" rel="noreferrer" className="hover:underline">{(() => { try { return new URL(e.page).pathname; } catch { return e.page; } })()}</a>{e.ownDomain ? "" : ", not on their own web address"})</span></li>)
-              : <li>Email: none shown on the pages read</li>}
           </ul>
         )}
       </div>
@@ -380,6 +495,7 @@ function Details({ lead }: { lead: Lead }) {
           <label className="flex items-center gap-2"><Checkbox checked={hand.handChecked} onCheckedChange={v => setHand({ ...hand, handChecked: v === true })} />Checked</label>
           <div><Label className="text-xs">Facebook followers</Label><Input className="h-8 w-28" inputMode="numeric" value={hand.facebookFollowers} onChange={e => setHand({ ...hand, facebookFollowers: e.target.value.replace(/\D/g, "") })} /></div>
           <div><Label className="text-xs">Instagram followers</Label><Input className="h-8 w-28" inputMode="numeric" value={hand.instagramFollowers} onChange={e => setHand({ ...hand, instagramFollowers: e.target.value.replace(/\D/g, "") })} /></div>
+          <div><Label className="text-xs">Email you found</Label><Input className="h-8 w-56" type="email" placeholder="e.g. from their Facebook page" value={hand.email} onChange={e => setHand({ ...hand, email: e.target.value })} /></div>
           <div><Label className="text-xs">Last post date</Label><Input className="h-8 w-36" type="date" value={hand.lastPostDate} onChange={e => setHand({ ...hand, lastPostDate: e.target.value })} /></div>
           <div className="min-w-[200px] flex-1"><Label className="text-xs">Notes</Label><Input className="h-8" value={hand.handCheckNotes} onChange={e => setHand({ ...hand, handCheckNotes: e.target.value })} /></div>
           <Button size="sm" variant="outline" onClick={() => save.mutate()} disabled={save.isPending}>Save</Button>
@@ -396,7 +512,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const { toast } = useToast();
   const { data, isLoading } = useQuery<{ search: SearchRow; leads: Lead[] }>({
     queryKey: ["/api/business-search", id],
-    refetchInterval: q => (q.state.data?.search.status === "running" || q.state.data?.search.status === "queued") ? 4000 : false,
+    refetchInterval: q => (q.state.data?.search.status === "running" || q.state.data?.search.status === "queued" || q.state.data?.search.emailJob?.running) ? 4000 : false,
   });
   const [listFilter, setListFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -404,6 +520,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const [tierFilter, setTierFilter] = useState("all");
   const [open, setOpen] = useState<string | null>(null);
   const [recheckOpen, setRecheckOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
   const action = useMutation({
     mutationFn: async (what: "stop" | "resume" | "recheck") => (await apiRequest("POST", `/api/business-search/${id}/${what}`, what === "recheck" ? { confirm: true } : undefined)).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }),
@@ -452,10 +569,19 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             {s.alreadyFound ? ` · ${s.alreadyFound} already found in earlier searches, skipped` : ""}
           </p>
           {s.errorMessage && <p className="text-sm text-amber-700 dark:text-amber-400">{s.errorMessage}</p>}
+          {s.emailJob && (
+            <p className="text-sm">
+              {s.emailJob.running ? "Finding emails: " : "Email finding done: "}
+              <b>{s.emailJob.done}</b> of {s.emailJob.total} looked up, <b>{s.emailJob.found}</b> found
+              {s.emailJob.aiCostUsd ? ` · AI cost $${s.emailJob.aiCostUsd.toFixed(2)}` : ""}
+              {s.emailJob.note ? <span className="text-amber-700 dark:text-amber-400"> · {s.emailJob.note}</span> : null}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             {isAdmin && (s.status === "running" || s.status === "queued") && <Button size="sm" variant="outline" onClick={() => action.mutate("stop")}><Pause className="mr-2 h-4 w-4" />Stop</Button>}
             {isAdmin && (s.status === "stopped" || s.status === "failed") && <Button size="sm" onClick={() => action.mutate("resume")}><Play className="mr-2 h-4 w-4" />Resume</Button>}
             {isAdmin && (s.status === "done" || s.status === "stopped" || s.status === "failed") && <Button size="sm" variant="outline" onClick={() => setRecheckOpen(true)}>Check again</Button>}
+            {isAdmin && s.status === "done" && !s.emailJob?.running && <Button size="sm" variant="outline" onClick={() => setFindOpen(true)} data-testid="button-find-emails">Find missing emails</Button>}
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=csv`}><Download className="mr-2 h-4 w-4" />CSV</a></Button>
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=xlsx`}><Download className="mr-2 h-4 w-4" />Excel</a></Button>
           </div>
@@ -466,6 +592,8 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
           )}
         </CardContent>
       </Card>
+
+      <FindEmailsDialog searchId={id} open={findOpen} onOpenChange={setFindOpen} />
 
       <Dialog open={recheckOpen} onOpenChange={setRecheckOpen}>
         <DialogContent>
@@ -537,7 +665,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                   <TableCell>{l.stillOpenFlag ? <Badge variant="destructive">Check</Badge> : ""}</TableCell>
                 </TableRow>
                 {open === l.id && (
-                  <TableRow><TableCell colSpan={ordering ? 15 : 13} className="p-0"><Details lead={l} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={ordering ? 15 : 13} className="p-0"><Details lead={l} isAdmin={isAdmin} /></TableCell></TableRow>
                 )}
               </Fragment>
             ))}

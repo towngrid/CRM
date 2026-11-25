@@ -10,7 +10,8 @@ import {
 } from "@shared/businessSearch";
 import type { LeadList } from "@shared/leadTypes";
 import { SerpBudgetStop, serpRequest } from "./serp";
-import { checkWebsite, orderingFromSite, type SiteCheck } from "./website";
+import { checkWebsite, emailsInPlainText, orderingFromSite, type SiteCheck } from "./website";
+import type { EmailLookup, SearchEmail } from "@shared/businessSearch";
 import { rescoreUser } from "./score";
 
 const HOURLY_WAIT_MS = 5 * 60_000;
@@ -320,6 +321,16 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
     ordering = { ...fromSite, appsFromSearch: apps, googleServiceOptions: serviceOptions(local), googleOrderLink: googleOrderLink(local) };
   }
 
+  // Free email step 2: emails written in the search results we already have, for this business only
+  // (e.g. a Facebook page's contact line in Google's snippet). Facebook itself is never opened.
+  const searchEmails: SearchEmail[] = [];
+  for (const r of webResults) {
+    if (!resultMatchesBusiness(r, who)) continue;
+    for (const email of emailsInPlainText(`${r.title} ${r.snippet}`)) {
+      if (!searchEmails.some(e => e.email === email)) searchEmails.push({ email, url: r.link, title: r.title });
+    }
+  }
+
   // Still open?
   // Only the name search: Facebook/Instagram results carry old post dates even for open businesses.
   const dates = nameSearchResults.map(r => parseResultDate(r.date)).filter((d): d is Date => !!d);
@@ -363,8 +374,13 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
     leadType,
     checkStatus: "checked",
     checkError: null,
-    findings: { website: site.website, social, ordering, stillOpen, jsLoaded: site.jsLoaded } satisfies {
+    findings: {
+      website: site.website, social, ordering, stillOpen, jsLoaded: site.jsLoaded, searchEmails,
+      // Paid email lookups and Seann's own entry survive a re-check.
+      emailLookup: ((lead.findings ?? {}) as any).emailLookup ?? {},
+    } satisfies {
       website: WebsiteFindings; social: SocialFindings; ordering: OrderingFindings | null; stillOpen: StillOpenFindings; jsLoaded: boolean;
+      searchEmails: SearchEmail[]; emailLookup: EmailLookup;
     },
     checkedAt: new Date(),
   }).where(eq(businessLeads.id, lead.id));

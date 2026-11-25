@@ -8,7 +8,8 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { businessLeads, businessSearches, type BusinessLead } from "@shared/schema";
 import {
-  BUSINESS_TYPES, OTHER_BUSINESS_TYPE, businessTypeLabel, estimateCredits, isZip, normalizePlace, townAndZip,
+  BUSINESS_TYPES, OTHER_BUSINESS_TYPE, AI_EMAIL_MONTHLY_CAP_USD, AI_EMAIL_TYPICAL_COST_USD, allEmails, bestEmail, businessTypeLabel,
+  estimateCredits, isZip, normalizePlace, townAndZip,
 } from "@shared/businessSearch";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
 import { getSerpUsageStatus } from "../lead-discovery";
@@ -17,6 +18,7 @@ import { getSerpApiKey } from "../appConfig";
 import { serpAccount } from "./serp";
 import { isRunning, markInterruptedSearches, resetForRecheck, runSearch } from "./runner";
 import { loadScorePoints, rescoreEveryone, rescoreUser, saveScorePoints } from "./score";
+import { aiKeySet, aiSpentThisMonth, findEmailFor } from "./emailFinder";
 import { DEFAULT_SCORE_POINTS, reasonsText } from "@shared/leadScore";
 
 const searchInput = z.object({
@@ -62,6 +64,11 @@ async function alreadyKnownIn(user: string, places: string[], pages: number): Pr
   return total;
 }
 
+// Progress of "Find missing emails" per search (in memory; a restart just stops it, and
+// running it again skips businesses that already have an email or were already looked up).
+interface EmailJob { running: boolean; total: number; done: number; found: number; aiCostUsd: number; note: string | null }
+const emailJobs = new Map<string, EmailJob>();
+
 function userId(req: any): string {
   return req.user.claims.sub;
 }
@@ -70,6 +77,7 @@ function userId(req: any): string {
 export function leadRow(lead: BusinessLead) {
   const f = (lead.findings ?? {}) as any;
   const noSocial = !lead.facebookUrl && !lead.instagramUrl;
+  const emails = allEmails(f);
   return {
     Name: lead.name,
     Score: lead.score ?? "",
@@ -78,9 +86,9 @@ export function leadRow(lead: BusinessLead) {
     Town: lead.town ?? "",
     Zip: lead.zip ?? "",
     Phone: lead.phone ?? "",
-    Email: f.website?.emails?.[0]?.email ?? (f.website?.contactForm === "yes" ? "No email shown (has contact form)" : "No email found"),
-    "Email found on": f.website?.emails?.[0]?.page ?? "",
-    "Other emails": (f.website?.emails ?? []).slice(1).map((e: any) => e.email).join(", "),
+    Email: emails[0]?.email ?? (f.website?.contactForm === "yes" ? "No email found (has contact form)" : "No email found"),
+    "Email source": emails[0] ? `${emails[0].label}${emails[0].url ? `: ${emails[0].url}` : ""}` : "",
+    "Other emails": emails.slice(1).map(e => e.email).join(", "),
     List: leadListLabel(lead.leadList),
     "Lead type": leadTypeLabel(lead.leadType),
     Website: lead.websiteUrl && f.website?.googleButton !== "social" ? lead.websiteUrl : "No Website found",
@@ -215,7 +223,10 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     if (!search) return res.status(404).json({ message: "Search not found" });
     const leads = await db.select().from(businessLeads).where(eq(businessLeads.searchId, search.id)).orderBy(asc(businessLeads.createdAt));
     res.json({
-      search: { ...search, label: businessTypeLabel(search.businessType, search.businessTypeOther), running: isRunning(search.id) },
+      search: {
+        ...search, label: businessTypeLabel(search.businessType, search.businessTypeOther), running: isRunning(search.id),
+        emailJob: emailJobs.get(search.id) ?? null,
+      },
       leads: leads.map(({ mapsResult: _raw, ...lead }) => lead),
     });
   });
@@ -240,6 +251,72 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     await resetForRecheck(search.id);
     void runSearch(search.id);
     res.json({ ok: true, creditsBefore: search.creditsUsed });
+  });
+
+  // ── Find missing emails (paid steps 3–4). Free estimate first, then confirm. ──
+  const findEmailsInput = z.object({
+    tiers: z.array(z.enum(["A", "B", "C"])).min(1).default(["A", "B"]),
+    useAi: z.boolean().default(true),
+  });
+
+  async function emailCandidates(searchId: string, user: string, tiers: string[]) {
+    const leads = await db.select().from(businessLeads).where(and(eq(businessLeads.searchId, searchId), eq(businessLeads.userId, user)));
+    return leads.filter(l => l.checkStatus === "checked" && !l.setAsideReason && l.tier && tiers.includes(l.tier) && !bestEmail(l.findings));
+  }
+
+  app.post("/api/business-search/:id/find-emails/estimate", isAuthenticated, async (req: any, res) => {
+    const parsed = findEmailsInput.safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: "Pick at least one tier." });
+    const leads = await emailCandidates(req.params.id, userId(req), parsed.data.tiers);
+    const serp = leads.filter(l => !(l.findings as any)?.emailLookup?.emailSearch).length;
+    const ai = leads.filter(l => !(l.findings as any)?.emailLookup?.ai).length;
+    const spent = await aiSpentThisMonth();
+    res.json({
+      businesses: leads.length,
+      serpCreditsMax: serp,
+      aiLookupsMax: parsed.data.useAi ? ai : 0,
+      aiCostMaxUsd: parsed.data.useAi ? Math.round(ai * AI_EMAIL_TYPICAL_COST_USD * 100) / 100 : 0,
+      aiAvailable: aiKeySet(),
+      aiSpentThisMonthUsd: Math.round(spent * 100) / 100,
+      aiCapUsd: AI_EMAIL_MONTHLY_CAP_USD,
+      budget: await budget(),
+    });
+  });
+
+  app.post("/api/business-search/:id/find-emails", isAdmin, async (req: any, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the cost first." });
+    const parsed = findEmailsInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Pick at least one tier." });
+    if (emailJobs.get(req.params.id)?.running) return res.status(409).json({ message: "Already finding emails for this search." });
+    const leads = await emailCandidates(req.params.id, userId(req), parsed.data.tiers);
+    const job: EmailJob = { running: true, total: leads.length, done: 0, found: 0, aiCostUsd: 0, note: null };
+    emailJobs.set(req.params.id, job);
+    void (async () => {
+      for (const l of leads) {
+        try {
+          const r = await findEmailFor(l.id, userId(req), { useSerp: true, useAi: parsed.data.useAi });
+          if (r.email) job.found++;
+          job.aiCostUsd += r.aiCostUsd;
+          if (/cap|not set/.test(r.how)) job.note = r.how;
+        } catch (error) {
+          job.note = String((error as Error)?.message ?? error).slice(0, 200);
+          if (/monthly safety stop|SERPAPI_KEY/i.test(job.note)) break;
+        }
+        job.done++;
+      }
+      job.running = false;
+    })();
+    res.json({ ok: true, total: leads.length });
+  });
+
+  // One business ("Find email" on its row).
+  app.post("/api/business-search/leads/:id/find-email", isAdmin, async (req: any, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the cost first." });
+    try {
+      res.json(await findEmailFor(req.params.id, userId(req), { useSerp: true, useAi: req.body?.useAi !== false }));
+    } catch (error) {
+      res.status(500).json({ message: String((error as Error)?.message ?? "Could not look for an email") });
+    }
   });
 
   app.post("/api/business-search/:id/stop", isAdmin, async (req: any, res) => {
@@ -276,13 +353,26 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     instagramFollowers: z.number().int().min(0).nullable().optional(),
     lastPostDate: z.string().max(40).nullable().optional(),
     handCheckNotes: z.string().max(2000).nullable().optional(),
+    // Email step 5: typed in by Seann (e.g. read on their Facebook page). "" clears it.
+    email: z.string().trim().max(200).optional(),
   });
   app.patch("/api/business-search/leads/:id", isAuthenticated, async (req: any, res) => {
     const parsed = handCheck.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Check the values" });
-    const [lead] = await db.update(businessLeads).set(parsed.data)
-      .where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req)))).returning();
-    if (!lead) return res.status(404).json({ message: "Business not found" });
+    const { email, ...fields } = parsed.data;
+    if (email && !z.string().email().safeParse(email).success) return res.status(400).json({ message: "That email address doesn't look right." });
+    const [current] = await db.select().from(businessLeads)
+      .where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req))));
+    if (!current) return res.status(404).json({ message: "Business not found" });
+    const update: Partial<typeof businessLeads.$inferInsert> = { ...fields };
+    if (email !== undefined) {
+      const f = (current.findings ?? {}) as any;
+      const lookup = { ...(f.emailLookup ?? {}) };
+      if (email) lookup.hand = { email: email.toLowerCase(), at: new Date().toISOString() };
+      else delete lookup.hand;
+      update.findings = { ...f, emailLookup: lookup };
+    }
+    const [lead] = await db.update(businessLeads).set(update).where(eq(businessLeads.id, current.id)).returning();
     await rescoreUser(userId(req)); // the hand check's last-post date can add points
     res.json(lead);
   });
@@ -297,11 +387,11 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
       const row = leadRow(lead);
       const street = lead.address ? lead.address.split(",")[0]?.trim() : null;
       const { town, zip } = townAndZip(lead.address);
-      const email: string | null = (lead.findings as any)?.website?.emails?.[0]?.email ?? null;
+      const email: string | null = bestEmail(lead.findings)?.email ?? null;
       const notes = [
         `From Business Search (${new Date().toISOString().slice(0, 10)}).`,
         `Website: ${row["Website check"] || row.Website}`,
-        email ? `Email ${email} shown on ${row["Email found on"]}` : null,
+        email ? `Email ${email}: ${row["Email source"]}` : null,
         lead.deliveryApps ? `Delivery apps: ${lead.deliveryApps}` : null,
         row["Takes orders on own site"] ? `Takes orders on own site: ${row["Takes orders on own site"]}` : null,
         lead.score != null ? `Opportunity score: ${lead.score} (tier ${lead.tier}): ${row["Why this score"]}` : null,

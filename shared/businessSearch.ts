@@ -411,3 +411,58 @@ export function townAndZip(address: string | null | undefined): { town: string |
   else if (parts.length >= 2) town = parts[parts.length - 2];
   return { town, zip };
 }
+
+// ── Email from every legal source, cheapest first (Seann, Nov 24) ────────────
+// 1. Their own website (free, Pass 1)  2. Search results we already have (free, Pass 1)
+// 3. One "name + town email" search (1 SerpAPI credit)  4. AI web search, kept only when a
+// cited source shows the email (cents)  5. Seann's own entry from the hand check.
+// Each step runs only if the earlier ones found nothing. Emails are never guessed.
+
+export interface SearchEmail { email: string; url: string; title: string }
+
+export interface EmailLookup {
+  /** Step 3: the paid "email" search. */
+  emailSearch?: { at: string; emails: SearchEmail[] };
+  /** Step 4: AI web search. Only emails a cited source shows are kept. */
+  ai?: { at: string; model: string; emails: { email: string; url: string; quote: string }[]; rejected: string[]; costUsd: number };
+  /** Step 5: typed in by Seann. */
+  hand?: { email: string; at: string };
+}
+
+export type EmailSourceKind = "hand" | "website" | "search_snippet" | "email_search" | "ai_search";
+
+export interface BestEmail { email: string; kind: EmailSourceKind; url: string | null; label: string }
+
+export const EMAIL_SOURCE_LABELS: Record<EmailSourceKind, string> = {
+  hand: "entered by you",
+  website: "on their website",
+  search_snippet: "in a search result",
+  email_search: "in an email search result",
+  ai_search: "found by AI search (source shown)",
+};
+
+/** Every email found for a business, best first; your own entry always wins. */
+export function allEmails(findings: any): BestEmail[] {
+  const out: BestEmail[] = [];
+  const push = (email: string | undefined, kind: EmailSourceKind, url: string | null) => {
+    if (!email || out.some(e => e.email === email)) return;
+    out.push({ email, kind, url, label: EMAIL_SOURCE_LABELS[kind] });
+  };
+  const f = findings ?? {};
+  const lookup: EmailLookup = f.emailLookup ?? {};
+  push(lookup.hand?.email, "hand", null);
+  for (const e of f.website?.emails ?? []) push(e.email, "website", e.page);
+  for (const e of f.searchEmails ?? []) push(e.email, "search_snippet", e.url);
+  for (const e of lookup.emailSearch?.emails ?? []) push(e.email, "email_search", e.url);
+  for (const e of lookup.ai?.emails ?? []) push(e.email, "ai_search", e.url);
+  return out;
+}
+
+export function bestEmail(findings: any): BestEmail | null {
+  return allEmails(findings)[0] ?? null;
+}
+
+/** AI step limits: a monthly dollar cap, and the model used. */
+export const AI_EMAIL_MONTHLY_CAP_USD = 20;
+/** Typical cost of one AI email lookup (a few web searches plus reading the results). */
+export const AI_EMAIL_TYPICAL_COST_USD = 0.1;

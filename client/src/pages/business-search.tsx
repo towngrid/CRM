@@ -235,6 +235,15 @@ function LinkOr({ url, empty }: { url: string | null; empty: string }) {
   return <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">{host}<ExternalLink className="h-3 w-3" /></a>;
 }
 
+function emailCell(l: Lead) {
+  const emails = l.findings?.website?.emails as { email: string; page: string }[] | undefined;
+  if (emails?.length) {
+    return <span className="whitespace-nowrap"><a href={`mailto:${emails[0].email}`} className="text-primary hover:underline" onClick={e => e.stopPropagation()}>{emails[0].email}</a>{emails.length > 1 && <span className="text-muted-foreground"> +{emails.length - 1}</span>}</span>;
+  }
+  if (l.findings?.website?.contactForm === "yes") return <span className="text-muted-foreground">Contact form only</span>;
+  return <span className="text-muted-foreground">No email found</span>;
+}
+
 function websiteCell(l: Lead) {
   const w = l.findings?.website;
   if (!l.websiteUrl || w?.googleButton === "social") return <span className="text-muted-foreground">No Website found</span>;
@@ -330,6 +339,9 @@ function Details({ lead }: { lead: Lead }) {
             {w.builder && <li>Built with: {w.builder}</li>}
             {w.ownedByOrderingCompany && <li>Website owned by the ordering company: {w.ownedByOrderingCompany}</li>}
             {w.pagesRead?.length > 0 && <li className="text-muted-foreground">Pages read: {w.pagesRead.length}</li>}
+            {w.emails?.length > 0
+              ? w.emails.map((e: any) => <li key={e.email}>Email: <a href={`mailto:${e.email}`} className="text-primary hover:underline">{e.email}</a> <span className="text-muted-foreground">({e.how === "mailto" ? "email link" : e.how === "protected" ? "hidden email" : "written"} on <a href={e.page} target="_blank" rel="noreferrer" className="hover:underline">{(() => { try { return new URL(e.page).pathname; } catch { return e.page; } })()}</a>{e.ownDomain ? "" : ", not on their own web address"})</span></li>)
+              : <li>Email: none shown on the pages read</li>}
           </ul>
         )}
       </div>
@@ -499,7 +511,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-6" /><TableHead>Score</TableHead><TableHead>Name</TableHead><TableHead>Town</TableHead><TableHead>Phone</TableHead><TableHead>Lead type</TableHead>
+              <TableHead className="w-6" /><TableHead>Score</TableHead><TableHead>Name</TableHead><TableHead>Town</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Lead type</TableHead>
               <TableHead>Website</TableHead><TableHead>Facebook</TableHead><TableHead>Instagram</TableHead>
               {ordering && <><TableHead>Delivery apps</TableHead><TableHead>Own ordering</TableHead></>}
               <TableHead>Rating</TableHead><TableHead>Reviews</TableHead><TableHead>Still open?</TableHead>
@@ -514,6 +526,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                   <TableCell className="font-medium">{l.name}{l.contactId && <Badge className="ml-2" variant="outline">Approved</Badge>}</TableCell>
                   <TableCell>{l.town ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{l.phone ?? "—"}</TableCell>
+                  <TableCell>{l.checkStatus === "checked" ? emailCell(l) : "—"}</TableCell>
                   <TableCell>{l.checkStatus === "pending" ? <span className="text-muted-foreground">checking…</span> : l.checkStatus === "failed" ? <span className="text-destructive" title={l.checkError ?? ""}>check failed</span> : leadTypeLabel(l.leadType)}</TableCell>
                   <TableCell>{l.checkStatus === "checked" ? websiteCell(l) : "—"}</TableCell>
                   <TableCell>{l.checkStatus === "checked" ? socialCell(l, "facebook") : "—"}</TableCell>
@@ -524,11 +537,11 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                   <TableCell>{l.stillOpenFlag ? <Badge variant="destructive">Check</Badge> : ""}</TableCell>
                 </TableRow>
                 {open === l.id && (
-                  <TableRow><TableCell colSpan={ordering ? 14 : 12} className="p-0"><Details lead={l} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={ordering ? 15 : 13} className="p-0"><Details lead={l} /></TableCell></TableRow>
                 )}
               </Fragment>
             ))}
-            {shown.length === 0 && <TableRow><TableCell colSpan={14} className="py-8 text-center text-muted-foreground">{s.status === "running" || s.status === "queued" ? "Searching Google Maps…" : "No businesses match."}</TableCell></TableRow>}
+            {shown.length === 0 && <TableRow><TableCell colSpan={15} className="py-8 text-center text-muted-foreground">{s.status === "running" || s.status === "queued" ? "Searching Google Maps…" : "No businesses match."}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>

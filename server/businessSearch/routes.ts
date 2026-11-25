@@ -78,6 +78,9 @@ export function leadRow(lead: BusinessLead) {
     Town: lead.town ?? "",
     Zip: lead.zip ?? "",
     Phone: lead.phone ?? "",
+    Email: f.website?.emails?.[0]?.email ?? (f.website?.contactForm === "yes" ? "No email shown (has contact form)" : "No email found"),
+    "Email found on": f.website?.emails?.[0]?.page ?? "",
+    "Other emails": (f.website?.emails ?? []).slice(1).map((e: any) => e.email).join(", "),
     List: leadListLabel(lead.leadList),
     "Lead type": leadTypeLabel(lead.leadType),
     Website: lead.websiteUrl && f.website?.googleButton !== "social" ? lead.websiteUrl : "No Website found",
@@ -294,9 +297,11 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
       const row = leadRow(lead);
       const street = lead.address ? lead.address.split(",")[0]?.trim() : null;
       const { town, zip } = townAndZip(lead.address);
+      const email: string | null = (lead.findings as any)?.website?.emails?.[0]?.email ?? null;
       const notes = [
         `From Business Search (${new Date().toISOString().slice(0, 10)}).`,
         `Website: ${row["Website check"] || row.Website}`,
+        email ? `Email ${email} shown on ${row["Email found on"]}` : null,
         lead.deliveryApps ? `Delivery apps: ${lead.deliveryApps}` : null,
         row["Takes orders on own site"] ? `Takes orders on own site: ${row["Takes orders on own site"]}` : null,
         lead.score != null ? `Opportunity score: ${lead.score} (tier ${lead.tier}): ${row["Why this score"]}` : null,
@@ -306,6 +311,7 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
       ].filter(Boolean).join("\n");
       const contact = await storage.createContact({
         company: lead.name,
+        email,
         useBusinessNameForEmail: "Yes",
         phone: lead.phone,
         phoneWork: lead.phone,

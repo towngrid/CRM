@@ -185,3 +185,34 @@ test("own website: reads home and Order page, finds delivery buttons", async () 
   assert.equal(o.ownOrderingPlatform, "Toast");
   assert.equal(o.siteLinks.find(l => l.service === "grubhub")?.page, "https://joes.example/order");
 });
+
+test("emails shown on their own website: mail icon, written text, hidden by Cloudflare; never guessed", async () => {
+  const { emailsIn, sortEmails } = await import("./businessSearch/website");
+  // Pio Pio's header: a mail icon among the social icons.
+  const header = `<header><a href="https://www.instagram.com/piopionyc"><i class="ig"></i></a>
+    <a href="mailto:info@piopio.com?subject=Hello"><svg class="mail-icon"></svg></a></header>`;
+  assert.deepEqual(emailsIn(header, "https://www.piopio.com/", "piopio.com").map(e => [e.email, e.how, e.ownDomain]), [["info@piopio.com", "mailto", true]]);
+  // Footer text, an image file name, a builder address and a placeholder are told apart.
+  const footer = `<footer>Questions? Email catering@joes.example or joespizza@gmail.com
+    <img src="logo@2x.png"> <script>var e="abc@sentry.wixpress.com"</script> your@email.com example@example.com</footer>`;
+  const found = emailsIn(footer, "https://joes.example/contact", "joes.example").map(e => e.email);
+  assert.deepEqual(found, ["catering@joes.example", "joespizza@gmail.com"]);
+  // Cloudflare email protection (key 0x12 XOR "a@b.co").
+  const hex = "12" + Array.from("a@b.co").map(c => (c.charCodeAt(0) ^ 0x12).toString(16).padStart(2, "0")).join("");
+  assert.equal(emailsIn(`<a class="__cf_email__" data-cfemail="${hex}">[email protected]</a>`, "https://b.co/", "b.co")[0]?.email, "a@b.co");
+  // Their own web address first.
+  assert.equal(sortEmails(emailsIn(footer, "https://joes.example/", "joes.example"))[0].email, "catering@joes.example");
+});
+
+test("the contact page is read first, and its emails are collected", async () => {
+  const opened: string[] = [];
+  const home = `<html><head><meta name="viewport" content="width=device-width"></head><body>${"Family restaurant since 1980. ".repeat(30)}
+    <a href="/menu">Menu</a><a href="/order">Order</a><a href="/gallery-menu">Gallery</a><a href="/takeout">Takeout</a><a href="/delivery">Delivery</a><a href="/about">About</a>
+    <a href="/contact-us">Contact</a></body></html>`;
+  const pages: Record<string, { status: number; body?: string }> = { "https://joes.example/": { status: 200, body: home } };
+  for (const p of ["menu", "order", "gallery-menu", "takeout", "delivery", "about"]) pages[`https://joes.example/${p}`] = { status: 200, body: "<p>page</p>" };
+  pages["https://joes.example/contact-us"] = { status: 200, body: `<p>Write to <a href="mailto:hello@joes.example">us</a></p>` };
+  const result = await checkWebsite("https://joes.example/", "google", fakeRuntime(pages, opened));
+  assert.equal(opened[1], "https://joes.example/contact-us");
+  assert.deepEqual(result.website.emails?.map(e => [e.email, e.page]), [["hello@joes.example", "https://joes.example/contact-us"]]);
+});

@@ -249,6 +249,17 @@ export interface WebsiteFindings {
   /** The ordering company that built/owns the site (Slice, ChowNow, Owner.com...). */
   ownedByOrderingCompany: string | null;
   pagesRead: string[];
+  /** Public emails shown on their own website, with the page each was on (never guessed). */
+  emails?: FoundEmail[];
+}
+
+export interface FoundEmail {
+  email: string;
+  page: string;
+  /** mailto link (e.g. a mail icon), written on the page, or hidden by Cloudflare's email protection. */
+  how: "mailto" | "text" | "protected";
+  /** On the business's own web address (info@theirsite.com) rather than e.g. gmail.com. */
+  ownDomain: boolean;
 }
 
 export interface FoundLink { url: string; page: string }

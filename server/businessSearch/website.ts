@@ -3,12 +3,12 @@
 import { fetchPublicPage, RedirectRefused, type SalonFetchRuntime } from "../salonPublicFetch";
 import {
   ORDERING_SERVICES, SOCIAL_SITES, hostMatches, hostOf, isNeverOpenUrl, orderingServiceForUrl,
-  type FoundLink, type OrderingFindings, type SocialKey, type WebsiteFindings, type YesNoUnknown,
+  type FoundEmail, type FoundLink, type OrderingFindings, type SocialKey, type WebsiteFindings, type YesNoUnknown,
 } from "@shared/businessSearch";
 
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const PAGE_TIMEOUT_MS = 12_000;
-const MAX_EXTRA_PAGES = 4;
+const MAX_EXTRA_PAGES = 5;
 
 export interface SiteCheck {
   website: WebsiteFindings;
@@ -75,6 +75,61 @@ export function orderingLinksIn(html: string, pageUrl: string): OrderingFindings
     out.push({ service: service.key, label: service.label, url, page: pageUrl });
   }
   return out;
+}
+
+// ── Public emails on their own website ──────────────────────────────────────
+// Only emails the site itself shows: mailto links (mail icons), emails written on the page,
+// and emails hidden by Cloudflare's email protection. Never guessed.
+
+const EMAIL_RE = /[a-z0-9][a-z0-9._%+-]{0,63}@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,24}/gi;
+// Addresses that belong to the website builder, tracking tools or examples, not the business.
+const NOT_BUSINESS_EMAIL = /@(?:.*\.)?(wixpress\.com|wix\.com|sentry\.io|sentry-next\.wixpress\.com|squarespace\.com|godaddy\.com|example\.(com|org)|domain\.com|email\.com|yourdomain\.com|yoursite\.com|sentry\.wixpress\.com|bentobox\.com|getbento\.com|popmenu\.com|spothopper\.com|toasttab\.com|doordash\.com|grubhub\.com|ubereats\.com|slicelife\.com|chownow\.com|w3\.org|schema\.org|cloudflare\.com|googlegroups\.com)$/i;
+const FILE_LIKE = /\.(png|jpe?g|gif|webp|svg|css|js|ico|woff2?)$/i;
+
+function decodeCloudflareEmail(hex: string): string | null {
+  if (!/^[0-9a-f]+$/i.test(hex) || hex.length < 4 || hex.length % 2) return null;
+  const key = parseInt(hex.slice(0, 2), 16);
+  let out = "";
+  for (let i = 2; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16) ^ key);
+  return out;
+}
+
+function cleanEmail(raw: string): string | null {
+  let e = raw.trim().toLowerCase();
+  try { e = decodeURIComponent(e); } catch { /* keep as is */ }
+  e = e.replace(/^mailto:/, "").split("?")[0].replace(/[.,;:]+$/, "");
+  const m = e.match(EMAIL_RE);
+  if (!m || m[0] !== e) return null;
+  if (FILE_LIKE.test(e) || NOT_BUSINESS_EMAIL.test(e)) return null;
+  if (/^(user|name|email|your(name|email)?|someone|test|john\.?doe|jane\.?doe)@/.test(e)) return null;
+  // Hex-looking local parts are tracking ids (e.g. a1b2c3...@sentry).
+  if (/^[0-9a-f]{16,}@/.test(e)) return null;
+  return e;
+}
+
+export function emailsIn(html: string, pageUrl: string, siteHost: string | null): FoundEmail[] {
+  const found = new Map<string, FoundEmail>();
+  const add = (raw: string | null, how: FoundEmail["how"]) => {
+    const email = raw ? cleanEmail(raw) : null;
+    if (!email || found.has(email)) return;
+    const domain = email.split("@")[1];
+    const ownDomain = !!siteHost && (siteHost === domain || siteHost.endsWith(`.${domain}`) || domain.endsWith(`.${siteHost}`));
+    found.set(email, { email, page: pageUrl, how, ownDomain });
+  };
+  for (const m of Array.from(html.matchAll(/href\s*=\s*["']\s*mailto:([^"'>\s]+)/gi))) add(m[1], "mailto");
+  for (const m of Array.from(html.matchAll(/data-cfemail\s*=\s*["']([0-9a-f]+)["']/gi))) add(decodeCloudflareEmail(m[1]), "protected");
+  for (const m of Array.from(html.matchAll(/\/cdn-cgi\/l\/email-protection#([0-9a-f]+)/gi))) add(decodeCloudflareEmail(m[1]), "protected");
+  // Emails written on the page (visible text only, not scripts or styles).
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&#64;|&#x40;/gi, "@").replace(/&amp;/gi, "&");
+  for (const m of Array.from(text.matchAll(EMAIL_RE))) add(m[0], "text");
+  return Array.from(found.values());
+}
+
+/** Best first: on their own web address, then a mailto link, then the rest. */
+export function sortEmails(emails: FoundEmail[]): FoundEmail[] {
+  const rank = (e: FoundEmail) => (e.ownDomain ? 0 : 2) + (e.how === "text" ? 1 : 0) + (/^(info|contact|hello|orders?|catering|events)@/.test(e.email) ? 0 : 0.5);
+  return [...emails].sort((a, b) => rank(a) - rank(b));
 }
 
 export function copyrightYear(html: string, now = new Date()): number | null {
@@ -147,21 +202,29 @@ export function orderingCompanyOwner(html: string, finalUrl: string): string | n
 
 const EXTRA_PAGE = /contact|about|order|menu|delivery|takeout|take-out|pickup|location|find-us|visit/i;
 
+// Contact pages first (emails, forms), then ordering pages, then the rest.
+function pagePriority(path: string, text: string): number {
+  const s = `${path} ${text}`;
+  if (/contact|get-in-touch|reach-us/i.test(s)) return 0;
+  if (/order|delivery|takeout|take-out|pickup/i.test(s)) return 1;
+  if (/menu/i.test(s)) return 2;
+  return 3;
+}
+
 function extraPages(html: string, base: string): string[] {
   const baseHost = hostOf(base);
-  const picked: string[] = [];
-  for (const link of hrefs(html, base)) {
-    if (picked.length >= MAX_EXTRA_PAGES) break;
+  const candidates: { url: string; priority: number; index: number }[] = [];
+  hrefs(html, base).forEach((link, index) => {
     const host = hostOf(link.url);
-    if (!host || host !== baseHost) continue;
-    if (/\.(pdf|jpe?g|png|gif|webp|svg|zip|docx?)(\?|$)/i.test(link.url)) continue;
+    if (!host || host !== baseHost) return;
+    if (/\.(pdf|jpe?g|png|gif|webp|svg|zip|docx?)(\?|$)/i.test(link.url)) return;
     const path = new URL(link.url).pathname;
-    if (path === "/" || path === new URL(base).pathname) continue;
-    if (!EXTRA_PAGE.test(path) && !EXTRA_PAGE.test(link.text)) continue;
+    if (path === "/" || path === new URL(base).pathname) return;
+    if (!EXTRA_PAGE.test(path) && !EXTRA_PAGE.test(link.text)) return;
     const clean = link.url.split("#")[0];
-    if (!picked.includes(clean)) picked.push(clean);
-  }
-  return picked;
+    if (!candidates.some(c => c.url === clean)) candidates.push({ url: clean, priority: pagePriority(path, link.text), index });
+  });
+  return candidates.sort((a, b) => a.priority - b.priority || a.index - b.index).slice(0, MAX_EXTRA_PAGES).map(c => c.url);
 }
 
 // ── The check ──────────────────────────────────────────────────────────────
@@ -258,6 +321,9 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
   website.builder = siteBuilder(home.html);
   website.ownedByOrderingCompany = orderingCompanyOwner(home.html, home.finalUrl);
   let form = hasContactForm(home.html);
+  const siteHost = hostOf(home.finalUrl);
+  const emails: FoundEmail[] = emailsIn(home.html, home.finalUrl, siteHost);
+  const addEmails = (list: FoundEmail[]) => { for (const e of list) if (!emails.some(x => x.email === e.email)) emails.push(e); };
   result.socialLinks = socialLinksIn(home.html, home.finalUrl);
   result.orderingLinks = orderingLinksIn(home.html, home.finalUrl);
   result.jsLoaded = (website.builder != null && JS_BUILDERS.has(website.builder)) || visibleTextLength(home.html) < 400;
@@ -267,6 +333,7 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
       const p = await readPage(page, runtime);
       website.pagesRead.push(p.finalUrl);
       if (!form && hasContactForm(p.html)) form = true;
+      addEmails(emailsIn(p.html, p.finalUrl, siteHost));
       const year = copyrightYear(p.html);
       if (year && (!website.copyrightYear || year > website.copyrightYear)) website.copyrightYear = year;
       for (const [key, link] of Object.entries(socialLinksIn(p.html, p.finalUrl)) as [SocialKey, FoundLink][]) {
@@ -287,6 +354,7 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
     }
   }
   website.contactForm = form ? "yes" : (result.jsLoaded ? "unknown" : "no");
+  website.emails = sortEmails(emails).slice(0, 5);
   return result;
 }
 

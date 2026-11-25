@@ -16,6 +16,8 @@ import { createDealRecord } from "../dealCreation";
 import { getSerpApiKey } from "../appConfig";
 import { serpAccount } from "./serp";
 import { isRunning, markInterruptedSearches, resetForRecheck, runSearch } from "./runner";
+import { loadScorePoints, rescoreEveryone, rescoreUser, saveScorePoints } from "./score";
+import { DEFAULT_SCORE_POINTS, reasonsText } from "@shared/leadScore";
 
 const searchInput = z.object({
   businessType: z.string().refine(v => v === OTHER_BUSINESS_TYPE || BUSINESS_TYPES.some(t => t.value === v), "Pick a business type"),
@@ -70,6 +72,9 @@ export function leadRow(lead: BusinessLead) {
   const noSocial = !lead.facebookUrl && !lead.instagramUrl;
   return {
     Name: lead.name,
+    Score: lead.score ?? "",
+    Tier: lead.tier ?? "",
+    "Why this score": lead.setAsideReason ? `Set aside: ${lead.setAsideReason}` : reasonsText((lead.scoreReasons as any[]) ?? []),
     Town: lead.town ?? "",
     Zip: lead.zip ?? "",
     Phone: lead.phone ?? "",
@@ -114,6 +119,43 @@ function websiteSummary(w: any): string {
 
 export function registerBusinessSearchRoutes(app: Express, isAuthenticated: RequestHandler, isAdmin: RequestHandler) {
   markInterruptedSearches().catch(error => console.error("[BusinessSearch] Could not mark interrupted searches:", error));
+  // Scores are cheap to recalculate; doing it at start-up keeps them in step with the current rules.
+  rescoreEveryone().catch(error => console.error("[BusinessSearch] Could not score leads:", error));
+
+  app.get("/api/score-points", isAuthenticated, async (_req, res) => {
+    try { res.json(await loadScorePoints()); }
+    catch { res.status(500).json({ message: "Could not load the point values" }); }
+  });
+
+  // Saves point values, then re-scores every business (free: no searches).
+  app.put("/api/admin/score-points", isAdmin, async (req, res) => {
+    const keys = new Set(DEFAULT_SCORE_POINTS.map(p => p.key));
+    const parsed = z.record(z.number().int().min(-100).max(200)).safeParse(req.body?.values);
+    if (!parsed.success) return res.status(400).json({ message: "Points must be whole numbers between -100 and 200." });
+    const values = Object.fromEntries(Object.entries(parsed.data).filter(([k]) => keys.has(k)));
+    const current = Object.fromEntries((await loadScorePoints()).map(p => [p.key, p.points]));
+    const tierA = values.tier_a ?? current.tier_a, tierB = values.tier_b ?? current.tier_b;
+    if (tierB >= tierA) return res.status(400).json({ message: "Tier A must start higher than tier B." });
+    try {
+      await saveScorePoints(values);
+      await rescoreEveryone();
+      res.json(await loadScorePoints());
+    } catch (error) {
+      console.error("[BusinessSearch] save points failed:", error);
+      res.status(500).json({ message: "Could not save the point values" });
+    }
+  });
+
+  // Seann sets a business aside by hand (e.g. no in-person service, wrong industry), or brings it back.
+  app.post("/api/business-search/leads/:id/set-aside", isAuthenticated, async (req: any, res) => {
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 200) : null;
+    const [lead] = await db.update(businessLeads)
+      .set(reason ? { setAsideByHand: true, setAsideReason: reason } : { setAsideByHand: false, setAsideReason: null })
+      .where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req)))).returning();
+    if (!lead) return res.status(404).json({ message: "Business not found" });
+    await rescoreUser(userId(req));
+    res.json({ ok: true });
+  });
 
   app.get("/api/business-search/budget", isAuthenticated, async (_req, res) => {
     try {
@@ -238,6 +280,7 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     const [lead] = await db.update(businessLeads).set(parsed.data)
       .where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req)))).returning();
     if (!lead) return res.status(404).json({ message: "Business not found" });
+    await rescoreUser(userId(req)); // the hand check's last-post date can add points
     res.json(lead);
   });
 
@@ -256,6 +299,7 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
         `Website: ${row["Website check"] || row.Website}`,
         lead.deliveryApps ? `Delivery apps: ${lead.deliveryApps}` : null,
         row["Takes orders on own site"] ? `Takes orders on own site: ${row["Takes orders on own site"]}` : null,
+        lead.score != null ? `Opportunity score: ${lead.score} (tier ${lead.tier}): ${row["Why this score"]}` : null,
         lead.rating != null ? `Google: ${lead.rating} stars, ${lead.reviewCount ?? 0} reviews` : null,
         lead.googleUrl ? `Google listing: ${lead.googleUrl}` : null,
         lead.stillOpenFlag ? `Still open? ${row["Still open?"]}` : null,

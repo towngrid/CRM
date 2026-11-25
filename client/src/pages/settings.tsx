@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { PlansEditor } from "@/components/settings/plans-editor";
+import { ScorePointsEditor } from "@/components/settings/score-points-editor";
 
 const profileSchema = z.object({
   firstName: z.string().optional(),
@@ -223,6 +224,7 @@ export default function Settings() {
         </Card>
 
         {authUser?.role === "admin" && <PlansEditor />}
+        {authUser?.role === "admin" && <ScorePointsEditor />}
       </div>
     </div>
   );

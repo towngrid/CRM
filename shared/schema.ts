@@ -773,6 +773,12 @@ export const businessLeads = pgTable("business_leads", {
   lastPostDate: text("last_post_date"),
   handCheckNotes: text("hand_check_notes"),
   // Approval into Contacts and Pipeline
+  // Opportunity score (Step 3b, shared/leadScore.ts). Null score = set aside (knock-out).
+  score: integer("score"),
+  tier: text("tier"), // A, B, C
+  scoreReasons: jsonb("score_reasons"), // [{ key, points, text }]
+  setAsideReason: text("set_aside_reason"), // closed, chain, or Seann's own reason
+  setAsideByHand: boolean("set_aside_by_hand").notNull().default(false),
   approvedAt: timestamp("approved_at"),
   contactId: varchar("contact_id"),
   dealId: varchar("deal_id"),
@@ -785,3 +791,11 @@ export const businessLeads = pgTable("business_leads", {
 
 export type BusinessSearch = typeof businessSearches.$inferSelect;
 export type BusinessLead = typeof businessLeads.$inferSelect;
+
+// Opportunity score point values edited by an admin (Settings). Missing keys use the
+// starting values in shared/leadScore.ts.
+export const scorePoints = pgTable("score_points", {
+  key: text("key").primaryKey(),
+  points: integer("points").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});

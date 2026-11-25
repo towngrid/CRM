@@ -36,6 +36,8 @@ type Lead = {
   leadList: string; leadType: string | null; checkStatus: string; checkError: string | null; findings: any;
   handChecked: boolean; facebookFollowers: number | null; instagramFollowers: number | null; lastPostDate: string | null; handCheckNotes: string | null;
   approvedAt: string | null; contactId: string | null; dealId: string | null;
+  score: number | null; tier: string | null; scoreReasons: { key: string; points: number; text: string }[] | null;
+  setAsideReason: string | null; setAsideByHand: boolean;
 };
 
 function errorText(error: unknown): string {
@@ -245,6 +247,47 @@ function socialCell(l: Lead, which: "facebook" | "instagram") {
   return <LinkOr url={url} empty={which === "facebook" ? "No Facebook found" : "No Instagram found"} />;
 }
 
+function TierBadge({ lead }: { lead: Lead }) {
+  if (lead.setAsideReason) return <Badge variant="outline" className="text-muted-foreground" title={lead.setAsideReason}>Set aside</Badge>;
+  if (lead.score == null) return <span className="text-muted-foreground">—</span>;
+  const cls = lead.tier === "A" ? "bg-emerald-600 text-white hover:bg-emerald-600" : lead.tier === "B" ? "bg-amber-500 text-white hover:bg-amber-500" : "";
+  return <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><b>{lead.score}</b><Badge variant={lead.tier === "C" ? "secondary" : "default"} className={cls}>{lead.tier}</Badge></span>;
+}
+
+function ScorePanel({ lead }: { lead: Lead }) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState("");
+  const setAside = useMutation({
+    mutationFn: async (r: string | null) => (await apiRequest("POST", `/api/business-search/leads/${lead.id}/set-aside`, { reason: r })).json(),
+    onSuccess: () => { setReason(""); queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }); },
+    onError: e => toast({ title: "Didn't work", description: errorText(e), variant: "destructive" }),
+  });
+  return (
+    <div className="space-y-2 md:col-span-2">
+      <h4 className="font-semibold">Opportunity score {lead.score != null && <>: {lead.score} (tier {lead.tier})</>}</h4>
+      {lead.setAsideReason ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span>Set aside, not scored: <b>{lead.setAsideReason}</b>{!lead.setAsideByHand && " (found automatically)"}.</span>
+          {lead.setAsideByHand && <Button size="sm" variant="outline" onClick={() => setAside.mutate(null)} disabled={setAside.isPending}>Bring it back</Button>}
+        </div>
+      ) : (
+        <>
+          {lead.scoreReasons?.length ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {lead.scoreReasons.map(r => <li key={r.key}><Badge variant="secondary">{r.points > 0 ? "+" : ""}{r.points} {r.text}</Badge></li>)}
+            </ul>
+          ) : <p className="text-muted-foreground">No points: little for TownGrid to fix here.</p>}
+          <p className="text-xs text-muted-foreground">Google profile checks (unclaimed, owner replies, Updates, photos, recent reviews) are added in step 3c. Change point values in Settings → Opportunity score.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input className="h-8 max-w-xs" placeholder="Reason, e.g. no in-person service" value={reason} onChange={e => setReason(e.target.value)} />
+            <Button size="sm" variant="outline" onClick={() => setAside.mutate(reason.trim() || "set aside by you")} disabled={setAside.isPending}>Set aside</Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Details({ lead }: { lead: Lead }) {
   const { toast } = useToast();
   const f = lead.findings ?? {};
@@ -272,6 +315,7 @@ function Details({ lead }: { lead: Lead }) {
 
   return (
     <div className="grid gap-4 bg-muted/40 p-4 text-sm md:grid-cols-2">
+      <ScorePanel lead={lead} />
       <div className="space-y-1">
         <h4 className="font-semibold">Website</h4>
         {!w?.url ? <p>No website found{w?.source === "none" ? " (Google lists none; one web search found no match)" : ""}.</p> : (
@@ -345,6 +389,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const [listFilter, setListFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [townFilter, setTownFilter] = useState("all");
+  const [tierFilter, setTierFilter] = useState("all");
   const [open, setOpen] = useState<string | null>(null);
   const [recheckOpen, setRecheckOpen] = useState(false);
   const action = useMutation({
@@ -360,7 +405,12 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
     .filter(l => listFilter === "all" || l.leadList === listFilter)
     .filter(l => typeFilter === "all" || l.leadType === typeFilter)
     .filter(l => townFilter === "all" || l.town === townFilter)
-    .sort((a, b) => order(a.leadType) - order(b.leadType) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0));
+    .filter(l => tierFilter === "all" || (tierFilter === "aside" ? !!l.setAsideReason : (l.tier === tierFilter && !l.setAsideReason)))
+    // Best opportunities first; set-aside businesses last; then lead type and review count.
+    .sort((a, b) => (a.setAsideReason ? 1 : 0) - (b.setAsideReason ? 1 : 0) || (b.score ?? -1) - (a.score ?? -1) ||
+      order(a.leadType) - order(b.leadType) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0));
+  const tierCounts = { A: 0, B: 0, C: 0, aside: 0 } as Record<string, number>;
+  for (const l of leads) { if (l.setAsideReason) tierCounts.aside++; else if (l.tier) tierCounts[l.tier]++; }
   const typeCounts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const l of leads) if (l.leadType) c[l.leadType] = (c[l.leadType] ?? 0) + 1;
@@ -428,6 +478,16 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
           <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="all">All lead types</SelectItem>{LEAD_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={tierFilter} onValueChange={setTierFilter}>
+          <SelectTrigger className="w-44" data-testid="select-tier"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All tiers</SelectItem>
+            <SelectItem value="A">A: visit or call first ({tierCounts.A})</SelectItem>
+            <SelectItem value="B">B: cold email ({tierCounts.B})</SelectItem>
+            <SelectItem value="C">C: later ({tierCounts.C})</SelectItem>
+            <SelectItem value="aside">Set aside ({tierCounts.aside})</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={townFilter} onValueChange={setTownFilter}>
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="all">All towns</SelectItem>{towns.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
@@ -439,7 +499,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-6" /><TableHead>Name</TableHead><TableHead>Town</TableHead><TableHead>Phone</TableHead><TableHead>Lead type</TableHead>
+              <TableHead className="w-6" /><TableHead>Score</TableHead><TableHead>Name</TableHead><TableHead>Town</TableHead><TableHead>Phone</TableHead><TableHead>Lead type</TableHead>
               <TableHead>Website</TableHead><TableHead>Facebook</TableHead><TableHead>Instagram</TableHead>
               {ordering && <><TableHead>Delivery apps</TableHead><TableHead>Own ordering</TableHead></>}
               <TableHead>Rating</TableHead><TableHead>Reviews</TableHead><TableHead>Still open?</TableHead>
@@ -448,8 +508,9 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
           <TableBody>
             {shown.map(l => (
               <Fragment key={l.id}>
-                <TableRow className="cursor-pointer" onClick={() => setOpen(open === l.id ? null : l.id)} data-testid={`row-lead-${l.id}`}>
+                <TableRow className={`cursor-pointer ${l.setAsideReason ? "opacity-60" : ""}`} onClick={() => setOpen(open === l.id ? null : l.id)} data-testid={`row-lead-${l.id}`}>
                   <TableCell>{open === l.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
+                  <TableCell>{l.checkStatus === "checked" ? <TierBadge lead={l} /> : "—"}</TableCell>
                   <TableCell className="font-medium">{l.name}{l.contactId && <Badge className="ml-2" variant="outline">Approved</Badge>}</TableCell>
                   <TableCell>{l.town ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{l.phone ?? "—"}</TableCell>
@@ -463,11 +524,11 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                   <TableCell>{l.stillOpenFlag ? <Badge variant="destructive">Check</Badge> : ""}</TableCell>
                 </TableRow>
                 {open === l.id && (
-                  <TableRow><TableCell colSpan={ordering ? 13 : 11} className="p-0"><Details lead={l} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={ordering ? 14 : 12} className="p-0"><Details lead={l} /></TableCell></TableRow>
                 )}
               </Fragment>
             ))}
-            {shown.length === 0 && <TableRow><TableCell colSpan={13} className="py-8 text-center text-muted-foreground">{s.status === "running" || s.status === "queued" ? "Searching Google Maps…" : "No businesses match."}</TableCell></TableRow>}
+            {shown.length === 0 && <TableRow><TableCell colSpan={14} className="py-8 text-center text-muted-foreground">{s.status === "running" || s.status === "queued" ? "Searching Google Maps…" : "No businesses match."}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>

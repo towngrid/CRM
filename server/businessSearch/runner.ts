@@ -11,6 +11,7 @@ import {
 import type { LeadList } from "@shared/leadTypes";
 import { SerpBudgetStop, serpRequest } from "./serp";
 import { checkWebsite, orderingFromSite, type SiteCheck } from "./website";
+import { rescoreUser } from "./score";
 
 const HOURLY_WAIT_MS = 5 * 60_000;
 const running = new Set<string>();
@@ -413,6 +414,9 @@ export async function runSearch(searchId: string): Promise<void> {
     });
     console.error(`[BusinessSearch] ${searchId} stopped:`, message);
   } finally {
+    // Score whatever was checked, also when the search stopped part-way.
+    const [row] = await db.select({ userId: businessSearches.userId }).from(businessSearches).where(eq(businessSearches.id, searchId)).catch(() => []);
+    if (row) await rescoreUser(row.userId).catch(error => console.error("[BusinessSearch] scoring failed:", error));
     running.delete(searchId);
   }
 }

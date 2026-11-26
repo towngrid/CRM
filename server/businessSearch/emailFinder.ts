@@ -27,6 +27,19 @@ export function aiKeySet(): boolean {
   return !!process.env.ANTHROPIC_API_KEY?.trim();
 }
 
+/**
+ * For setting up the key: which variables mentioning "anthropic" the CRM can see, and what
+ * kind of value each holds. Never returns any part of a key beyond its public "sk-ant-..." prefix type.
+ */
+export function aiKeyDiagnostics(): { name: string; empty: boolean; kind: string; looksShortened: boolean }[] {
+  return Object.keys(process.env).filter(k => /anthropic/i.test(k)).sort().map(name => {
+    const v = (process.env[name] ?? "").trim();
+    const kind = !v ? "empty" : v.startsWith("sk-ant-api") ? "API key (sk-ant-api…)" : v.startsWith("sk-ant-admin") ? "Admin key (won't work)"
+      : v.startsWith("sk-ant-oat") ? "Claude login token (won't work)" : v.startsWith("sk-ant-") ? "other sk-ant- key" : v.startsWith("${{") ? "unresolved reference" : "not an Anthropic key";
+    return { name, empty: !v, kind, looksShortened: /\.\.\.|…/.test(v) || (v.length > 0 && v.length < 60) };
+  });
+}
+
 function monthStart(now = new Date()): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }

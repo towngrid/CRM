@@ -18,7 +18,7 @@ import { getSerpApiKey } from "../appConfig";
 import { serpAccount } from "./serp";
 import { isRunning, markInterruptedSearches, resetForRecheck, runSearch } from "./runner";
 import { loadScorePoints, rescoreEveryone, rescoreUser, saveScorePoints } from "./score";
-import { aiKeySet, aiSpentThisMonth, findEmailFor } from "./emailFinder";
+import { aiKeyDiagnostics, aiKeySet, aiSpentThisMonth, findEmailFor } from "./emailFinder";
 import { DEFAULT_SCORE_POINTS, reasonsText } from "@shared/leadScore";
 
 const searchInput = z.object({
@@ -251,6 +251,11 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     await resetForRecheck(search.id);
     void runSearch(search.id);
     res.json({ ok: true, creditsBefore: search.creditsUsed });
+  });
+
+  // Admin: which ANTHROPIC variables the CRM sees (names and value type only, never the key).
+  app.get("/api/admin/ai-key-check", isAdmin, (_req, res) => {
+    res.json({ aiKeySet: aiKeySet(), variables: aiKeyDiagnostics() });
   });
 
   // ── Find missing emails (paid steps 3–4). Free estimate first, then confirm. ──

@@ -9,7 +9,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { businessLeads, type BusinessLead } from "@shared/schema";
 import {
-  AI_EMAIL_MONTHLY_CAP_USD, AI_EMAIL_TYPICAL_COST_USD, bestEmail, resultMatchesBusiness,
+  AI_EMAIL_MONTHLY_CAP_USD, AI_EMAIL_TYPICAL_COST_USD, bestEmail, emailBelongsToBusiness, resultMatchesBusiness,
   type EmailLookup, type SearchEmail,
 } from "@shared/businessSearch";
 import { serpRequest } from "./serp";
@@ -60,6 +60,7 @@ async function emailSearchStep(lead: BusinessLead): Promise<SearchEmail[]> {
     const result = { title: r.title ?? "", snippet: r.snippet ?? "", link: r.link ?? "" };
     if (!result.link || !resultMatchesBusiness(result, who)) continue;
     for (const email of emailsInPlainText(`${result.title} ${result.snippet}`)) {
+      if (!emailBelongsToBusiness(email, { name: lead.name, websiteUrl: lead.websiteUrl })) continue;
       if (!found.some(e => e.email === email)) found.push({ email, url: result.link, title: result.title });
     }
   }
@@ -129,7 +130,10 @@ EMAIL: NONE`;
       if (typeof c.cited_text === "string") quotes.push({ url: c.url ?? "", quote: c.cited_text });
     }
   }
-  const { emails, rejected } = keepCitedEmails(text, quotes);
+  const cited = keepCitedEmails(text, quotes);
+  // Same rule as search results: another organization's email (a chamber, a directory) isn't theirs.
+  const emails = cited.emails.filter(e => emailBelongsToBusiness(e.email, { name: lead.name, websiteUrl: lead.websiteUrl }));
+  const rejected = [...cited.rejected, ...cited.emails.filter(e => !emails.includes(e)).map(e => e.email)];
 
   const usage: any = response.usage ?? {};
   const [inPrice, outPrice] = PRICES[response.model] ?? [5, 25];

@@ -11,7 +11,7 @@ import {
 import type { LeadList } from "@shared/leadTypes";
 import { SerpBudgetStop, serpRequest } from "./serp";
 import { checkWebsite, emailsInPlainText, orderingFromSite, type SiteCheck } from "./website";
-import type { EmailLookup, SearchEmail } from "@shared/businessSearch";
+import { emailBelongsToBusiness, type EmailLookup, type SearchEmail } from "@shared/businessSearch";
 import { rescoreUser } from "./score";
 
 const HOURLY_WAIT_MS = 5 * 60_000;
@@ -327,6 +327,7 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
   for (const r of webResults) {
     if (!resultMatchesBusiness(r, who)) continue;
     for (const email of emailsInPlainText(`${r.title} ${r.snippet}`)) {
+      if (!emailBelongsToBusiness(email, { name: lead.name, websiteUrl: site.website.url })) continue;
       if (!searchEmails.some(e => e.email === email)) searchEmails.push({ email, url: r.link, title: r.title });
     }
   }

@@ -349,6 +349,27 @@ export function nameTokens(name: string): string[] {
 
 function digits(s: string): string { return s.replace(/\D/g, ""); }
 
+const FREE_MAIL = /@(gmail|googlemail|yahoo|ymail|aol|hotmail|outlook|live|msn|icloud|me|mac|optonline|optimum|verizon|att|sbcglobal|comcast|earthlink|protonmail|proton)\.[a-z.]+$/i;
+
+/**
+ * Does an email found in a search result belong to this business? (Nov 26: a snippet of
+ * La Bussola's Instagram showed the Glen Cove Chamber's email.) Yes if it's on their own
+ * web address, or a free mailbox (gmail, yahoo…) whose name part contains part of their name.
+ */
+export function emailBelongsToBusiness(email: string, business: { name: string; websiteUrl?: string | null }): boolean {
+  const [local, domain] = email.toLowerCase().split("@");
+  if (!local || !domain) return false;
+  const site = business.websiteUrl ? hostOf(business.websiteUrl) : null;
+  if (site && (domain === site || domain.endsWith(`.${site}`) || site.endsWith(`.${domain}`))) return true;
+  const squashedLocal = local.replace(/[^a-z0-9]/g, "");
+  const tokens = nameTokens(business.name).filter(t => t.length >= 4);
+  const namePart = tokens.some(t => squashedLocal.includes(t.slice(0, Math.min(t.length, 5))));
+  if (FREE_MAIL.test(email)) return namePart;
+  // Their own domain that Google doesn't list as their website (e.g. info@joespizzagc.com): the domain must carry their name.
+  const domainName = domain.split(".").slice(0, -1).join("");
+  return tokens.some(t => domainName.includes(t.slice(0, Math.min(t.length, 5))));
+}
+
 /** Does a search result's title/snippet name this business, in this town or with its phone? */
 export function resultMatchesBusiness(
   result: { title?: string; snippet?: string; link?: string },

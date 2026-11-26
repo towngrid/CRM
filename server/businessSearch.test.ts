@@ -240,3 +240,14 @@ test("email steps: snippets, best-email order, and AI answers kept only when a s
   assert.deepEqual(keepCitedEmails("EMAIL: info@joespizza.com", quotes), { emails: [], rejected: ["info@joespizza.com"] }, "a guessed address is thrown away");
   assert.deepEqual(keepCitedEmails("EMAIL: NONE", quotes), { emails: [], rejected: [] });
 });
+
+test("an email in a search result must belong to the business (Glen Cove, Nov 26)", async () => {
+  const { emailBelongsToBusiness } = await import("@shared/businessSearch");
+  // La Bussola's Instagram snippet showed the Chamber of Commerce's email.
+  assert.equal(emailBelongsToBusiness("info@glencovechamber.org", { name: "La Bussola Restaurant", websiteUrl: "http://www.labussolaristorante.com/" }), false);
+  assert.equal(emailBelongsToBusiness("kikoglencove@gmail.com", { name: "Kiko Ramen Glen Cove", websiteUrl: "https://order.toasttab.com/online/kiko" }), true);
+  assert.equal(emailBelongsToBusiness("info@themarkerny.com", { name: "The Marker", websiteUrl: "https://themarkerny.com/" }), true);
+  assert.equal(emailBelongsToBusiness("rekhamaini.metro@gmail.com", { name: "The Metropolitan - Restaurant & Bar", websiteUrl: null }), true);
+  assert.equal(emailBelongsToBusiness("someone@gmail.com", { name: "Green Eats", websiteUrl: "https://greeneatsli.com" }), false);
+  assert.equal(emailBelongsToBusiness("orders@greeneatsglencove.com", { name: "Green Eats", websiteUrl: null }), true, "their own domain, not listed on Google");
+});

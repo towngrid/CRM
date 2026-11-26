@@ -19,6 +19,7 @@ import { serpAccount } from "./serp";
 import { isRunning, markInterruptedSearches, resetForRecheck, runSearch } from "./runner";
 import { loadScorePoints, rescoreEveryone, rescoreUser, saveScorePoints } from "./score";
 import { aiKeyDiagnostics, aiKeySet, aiSpentThisMonth, findEmailFor } from "./emailFinder";
+import { runPass2, savePass2 } from "./pass2";
 import { DEFAULT_SCORE_POINTS, reasonsText } from "@shared/leadScore";
 
 const searchInput = z.object({
@@ -68,6 +69,8 @@ async function alreadyKnownIn(user: string, places: string[], pages: number): Pr
 // running it again skips businesses that already have an email or were already looked up).
 interface EmailJob { running: boolean; total: number; done: number; found: number; aiCostUsd: number; note: string | null }
 const emailJobs = new Map<string, EmailJob>();
+interface Pass2Job { running: boolean; total: number; done: number; lookups: number; note: string | null }
+const pass2Jobs = new Map<string, Pass2Job>();
 
 function userId(req: any): string {
   return req.user.claims.sub;
@@ -104,6 +107,13 @@ export function leadRow(lead: BusinessLead) {
     "Still open?": lead.stillOpenFlag ? `Check: ${(f.stillOpen?.reasons ?? []).join("; ")}` : "",
     "Google AI summary": f.stillOpen?.aiSummary ?? "",
     "Google listing": lead.googleUrl ?? "",
+    "Google profile checked": f.pass2?.at ? String(f.pass2.at).slice(0, 10) : "",
+    "Unclaimed on Google": f.pass2 ? (f.pass2.unclaimed ? "Yes" : "No") : "",
+    "Owner replies (newest 10 reviews)": f.pass2 ? `${f.pass2.ownerRepliesOfNewest10} of ${f.pass2.reviewsChecked}` : "",
+    "Unanswered 1-2 star review": f.pass2 ? (f.pass2.unansweredBadReview ? "Yes" : "No") : "",
+    "Newest Google review": f.pass2?.newestReviewDate ? String(f.pass2.newestReviewDate).slice(0, 10) : "",
+    "Newest Google Update post": f.pass2 ? (f.pass2.newestUpdateDate ? String(f.pass2.newestUpdateDate).slice(0, 10) : "None") : "",
+    "Owner photos on Google": f.pass2 ? f.pass2.ownerPhotoCount : "",
     Address: lead.address ?? "",
     Category: lead.googleCategory ?? "",
   };
@@ -226,6 +236,7 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
       search: {
         ...search, label: businessTypeLabel(search.businessType, search.businessTypeOther), running: isRunning(search.id),
         emailJob: emailJobs.get(search.id) ?? null,
+        pass2Job: pass2Jobs.get(search.id) ?? null,
       },
       leads: leads.map(({ mapsResult: _raw, ...lead }) => lead),
     });
@@ -321,6 +332,60 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
       res.json(await findEmailFor(req.params.id, userId(req), { useSerp: true, useAi: req.body?.useAi !== false }));
     } catch (error) {
       res.status(500).json({ message: String((error as Error)?.message ?? "Could not look for an email") });
+    }
+  });
+
+  // ── Pass 2: Google profile check, businesses scoring at the tier B line (40) or more ──
+  async function pass2Candidates(searchId: string, user: string, all = false) {
+    const line = (await loadScorePoints()).find(p => p.key === "tier_b")?.points ?? 40;
+    const leads = await db.select().from(businessLeads).where(and(eq(businessLeads.searchId, searchId), eq(businessLeads.userId, user)));
+    return { line, leads: leads.filter(l => l.checkStatus === "checked" && !l.setAsideReason && (l.score ?? 0) >= line && (all || !(l.findings as any)?.pass2)) };
+  }
+
+  app.post("/api/business-search/:id/pass2/estimate", isAuthenticated, async (req: any, res) => {
+    const { line, leads } = await pass2Candidates(req.params.id, userId(req));
+    res.json({ line, businesses: leads.length, creditsMax: leads.length * 4, creditsLikely: leads.length * 3, budget: await budget() });
+  });
+
+  app.post("/api/business-search/:id/pass2", isAdmin, async (req: any, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the cost first." });
+    if (pass2Jobs.get(req.params.id)?.running) return res.status(409).json({ message: "Already checking Google profiles for this search." });
+    const { leads } = await pass2Candidates(req.params.id, userId(req));
+    const b = await budget();
+    if (leads.length * 3 > b.left) return res.status(400).json({ message: `This needs about ${leads.length * 3} credits but only ${b.left} are left this month.` });
+    const job: Pass2Job = { running: true, total: leads.length, done: 0, lookups: 0, note: null };
+    pass2Jobs.set(req.params.id, job);
+    const user = userId(req);
+    void (async () => {
+      for (const lead of leads) {
+        try {
+          const result = await runPass2(lead);
+          await savePass2(lead, result);
+          job.lookups += result.lookups;
+        } catch (error) {
+          job.note = String((error as Error)?.message ?? error).slice(0, 200);
+          if (/monthly safety stop|SERPAPI_KEY/i.test(job.note)) break;
+        }
+        job.done++;
+      }
+      await rescoreUser(user).catch(() => {});
+      job.running = false;
+    })();
+    res.json({ ok: true, total: leads.length });
+  });
+
+  // One business (button in its details).
+  app.post("/api/business-search/leads/:id/pass2", isAdmin, async (req: any, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm the cost first." });
+    const [lead] = await db.select().from(businessLeads).where(and(eq(businessLeads.id, req.params.id), eq(businessLeads.userId, userId(req))));
+    if (!lead) return res.status(404).json({ message: "Business not found" });
+    try {
+      const result = await runPass2(lead);
+      await savePass2(lead, result);
+      await rescoreUser(userId(req));
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: String((error as Error)?.message ?? "Google profile check failed") });
     }
   });
 

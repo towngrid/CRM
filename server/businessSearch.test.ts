@@ -251,3 +251,18 @@ test("an email in a search result must belong to the business (Glen Cove, Nov 26
   assert.equal(emailBelongsToBusiness("someone@gmail.com", { name: "Green Eats", websiteUrl: "https://greeneatsli.com" }), false);
   assert.equal(emailBelongsToBusiness("orders@greeneatsglencove.com", { name: "Green Eats", websiteUrl: null }), true, "their own domain, not listed on Google");
 });
+
+test("Pass 2 reads reviews and posts from SerpAPI's shapes", async () => {
+  const { readReviews, readPostDates } = await import("./businessSearch/pass2");
+  const reviews = [
+    { rating: 5, iso_date: "2026-11-20T10:00:00Z", response: { snippet: "Thanks!", iso_date: "2026-11-21T00:00:00Z" } },
+    { rating: 1, iso_date: "2026-11-01T10:00:00Z" },
+    { rating: 4, iso_date: "2026-10-01T10:00:00Z" },
+  ];
+  assert.deepEqual(readReviews(reviews), {
+    ownerRepliesOfNewest10: 1, reviewsChecked: 3, replyFieldSeen: true, unansweredBadReview: true, newestReviewDate: "2026-11-20T10:00:00.000Z",
+  });
+  // Posts list ("posted_at") and the place's "From the owner" posts ("date" like "Jan 14, 2025").
+  assert.deepEqual(readPostDates([{ posted_at: "2025-12-08T02:43:32Z" }, { date: "Jan 14, 2025" }, { title: "no date" }]).map(d => d.slice(0, 10)),
+    ["2025-12-08", "2025-01-14"]);
+});

@@ -28,7 +28,7 @@ export const DEFAULT_SCORE_POINTS: readonly ScorePoint[] = [
   { key: "few_owner_replies", group: "get_seen", label: "Owner replied to fewer than 2 of the newest 10 reviews", points: 15, source: "Pass 2" },
   { key: "unanswered_bad_review", group: "get_seen", label: "An unanswered 1–2 star review among the newest 10", points: 5, source: "Pass 2" },
   { key: "no_updates_90d", group: "get_seen", label: "No Google \"Updates\" posts in 90 days", points: 5, source: "Pass 2" },
-  { key: "no_owner_photo_6m", group: "get_seen", label: "No owner photo in 6 months", points: 10, source: "Pass 2" },
+  { key: "no_owner_photo_6m", group: "get_seen", label: "No photos from the owner on Google (Google doesn't give photo dates, so \"in 6 months\" can't be checked)", points: 10, source: "Pass 2" },
   { key: "few_reviews", group: "get_seen", label: "Review count under half the average of the top 3 in the same search", points: 10, source: "Pass 1" },
   { key: "no_social", group: "get_seen", label: "No Facebook and no Instagram found", points: 10, source: "Pass 1" },
   { key: "social_not_linked", group: "get_seen", label: "Social accounts exist but aren't linked from the website", points: 5, source: "Pass 1" },
@@ -138,7 +138,9 @@ export function scoreLead(input: ScoreInput, points: ScorePoint[]): ScoreResult 
     if (typeof pass2.ownerRepliesOfNewest10 === "number" && pass2.ownerRepliesOfNewest10 < 2) add("few_owner_replies", `owner replied to ${pass2.ownerRepliesOfNewest10} of the newest 10 reviews`);
     if (pass2.unansweredBadReview === true) add("unanswered_bad_review", "unanswered 1–2 star review");
     if (pass2.newestUpdateDate !== undefined && (!pass2.newestUpdateDate || now.getTime() - Date.parse(pass2.newestUpdateDate) > 90 * DAY)) add("no_updates_90d", "no Google Updates in 90 days");
-    if (pass2.newestOwnerPhotoDate !== undefined && (!pass2.newestOwnerPhotoDate || now.getTime() - Date.parse(pass2.newestOwnerPhotoDate) > 182 * DAY)) add("no_owner_photo_6m", "no owner photo in 6 months");
+    // Google gives no photo dates (Nov 26), so this checks for owner photos at all.
+    if (typeof pass2.ownerPhotoCount === "number" && pass2.ownerPhotoCount === 0) add("no_owner_photo_6m", "no photos from the owner on Google");
+    else if (pass2.newestOwnerPhotoDate !== undefined && (!pass2.newestOwnerPhotoDate || now.getTime() - Date.parse(pass2.newestOwnerPhotoDate) > 182 * DAY)) add("no_owner_photo_6m", "no owner photo in 6 months");
     if (pass2.newestReviewDate && now.getTime() - Date.parse(pass2.newestReviewDate) <= 60 * DAY) add("recent_review", "Google review in the last 60 days");
   }
 

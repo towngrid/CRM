@@ -379,9 +379,11 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
       website: site.website, social, ordering, stillOpen, jsLoaded: site.jsLoaded, searchEmails,
       // Paid email lookups and Seann's own entry survive a re-check.
       emailLookup: ((lead.findings ?? {}) as any).emailLookup ?? {},
+      // The Google profile check (Pass 2) also survives a re-check.
+      pass2: ((lead.findings ?? {}) as any).pass2 ?? null,
     } satisfies {
       website: WebsiteFindings; social: SocialFindings; ordering: OrderingFindings | null; stillOpen: StillOpenFindings; jsLoaded: boolean;
-      searchEmails: SearchEmail[]; emailLookup: EmailLookup;
+      searchEmails: SearchEmail[]; emailLookup: EmailLookup; pass2: unknown;
     },
     checkedAt: new Date(),
   }).where(eq(businessLeads.id, lead.id));

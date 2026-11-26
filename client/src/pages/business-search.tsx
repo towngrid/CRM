@@ -29,6 +29,7 @@ type SearchRow = {
   estimate: CreditEstimate | null; creditsUsed: number; cachedCalls: number; businessesFound: number; businessesChecked: number;
   outsideArea: number; duplicatesRemoved: number; alreadyFound: number; errorMessage: string | null; createdAt: string; finishedAt: string | null; running: boolean;
   emailJob?: { running: boolean; total: number; done: number; found: number; aiCostUsd: number; note: string | null } | null;
+  pass2Job?: { running: boolean; total: number; done: number; lookups: number; note: string | null } | null;
 };
 
 type FindEmailsEstimate = {
@@ -378,6 +379,82 @@ function TierBadge({ lead }: { lead: Lead }) {
   return <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><b>{lead.score}</b><Badge variant={lead.tier === "C" ? "secondary" : "default"} className={cls}>{lead.tier}</Badge></span>;
 }
 
+/** Pass 2 results for one business, or a button to run it (about 3 credits). */
+function GoogleProfilePanel({ lead, isAdmin }: { lead: Lead; isAdmin: boolean }) {
+  const { toast } = useToast();
+  const [asking, setAsking] = useState(false);
+  const p = lead.findings?.pass2;
+  const run = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/business-search/leads/${lead.id}/pass2`, { confirm: true })).json(),
+    onSuccess: (r: { lookups: number }) => { setAsking(false); toast({ title: "Google profile checked", description: `${r.lookups} SerpAPI credits at most (0 for any reused from the last 30 days).` }); queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }); },
+    onError: e => { setAsking(false); toast({ title: "Didn't work", description: errorText(e), variant: "destructive" }); },
+  });
+  const day = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleDateString() : "none";
+  return (
+    <div className="space-y-1">
+      <h4 className="font-semibold">Google profile</h4>
+      {p ? (
+        <ul className="space-y-0.5">
+          <li>Claimed by the owner: <b>{p.unclaimed ? "No: unclaimed (\"Own this business?\")" : "Yes"}</b></li>
+          <li>Owner replied to <b>{p.ownerRepliesOfNewest10} of the newest {p.reviewsChecked}</b> reviews{p.unansweredBadReview ? "; a 1–2 star review has no reply" : ""}</li>
+          <li>Newest review: {day(p.newestReviewDate)}</li>
+          <li>Newest "Updates" post: {p.newestUpdateDate ? day(p.newestUpdateDate) : "none found"}</li>
+          <li>Photos from the owner: {p.ownerPhotoCount >= 10 ? "10 or more" : p.ownerPhotoCount}</li>
+          {p.hoursLastUpdated && <li>Hours: {p.hoursLastUpdated}</li>}
+          <li className="text-xs text-muted-foreground">Checked {day(p.at)}</li>
+        </ul>
+      ) : <p className="text-muted-foreground">Not checked yet.</p>}
+      {isAdmin && !p && lead.checkStatus === "checked" && !lead.setAsideReason && (
+        asking ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Uses about 3 SerpAPI credits (at most 4). Go ahead?</span>
+            <Button size="sm" onClick={() => run.mutate()} disabled={run.isPending}>{run.isPending ? "Checking…" : "Yes, check it"}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAsking(false)} disabled={run.isPending}>Cancel</Button>
+          </div>
+        ) : <Button size="sm" variant="outline" onClick={() => setAsking(true)}>Check Google profile</Button>
+      )}
+    </div>
+  );
+}
+
+/** "Google profile check" for every business scoring 40+: cost first, then confirm. */
+function Pass2Dialog({ searchId, open, onOpenChange }: { searchId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { toast } = useToast();
+  const { data: est } = useQuery<{ line: number; businesses: number; creditsMax: number; creditsLikely: number; budget: Budget }>({
+    queryKey: ["pass2-estimate", searchId],
+    queryFn: async () => (await apiRequest("POST", `/api/business-search/${searchId}/pass2/estimate`, {})).json(),
+    enabled: open,
+  });
+  const start = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/business-search/${searchId}/pass2`, { confirm: true })).json(),
+    onSuccess: () => { onOpenChange(false); queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }); },
+    onError: e => toast({ title: "Didn't start", description: errorText(e), variant: "destructive" }),
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Check Google profiles?</DialogTitle>
+          <DialogDescription>
+            For each business scoring {est?.line ?? 40} or more (not yet checked): is the Google profile unclaimed, does the owner reply to reviews,
+            any recent "Updates" posts, any photos from the owner. Search results only; nothing is opened on Google.
+          </DialogDescription>
+        </DialogHeader>
+        {est && (
+          <div className="space-y-1 text-sm">
+            <p><b>{est.businesses}</b> businesses to check.</p>
+            <p>About <b>{est.creditsLikely}</b> SerpAPI credits, at most <b>{est.creditsMax}</b> ({est.budget.left} left this month).</p>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => start.mutate()} disabled={start.isPending || !est || est.businesses === 0}>Yes, check them</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ScorePanel({ lead }: { lead: Lead }) {
   const { toast } = useToast();
   const [reason, setReason] = useState("");
@@ -401,7 +478,10 @@ function ScorePanel({ lead }: { lead: Lead }) {
               {lead.scoreReasons.map(r => <li key={r.key}><Badge variant="secondary">{r.points > 0 ? "+" : ""}{r.points} {r.text}</Badge></li>)}
             </ul>
           ) : <p className="text-muted-foreground">No points: little for TownGrid to fix here.</p>}
-          <p className="text-xs text-muted-foreground">Google profile checks (unclaimed, owner replies, Updates, photos, recent reviews) are added in step 3c. Change point values in Settings → Opportunity score.</p>
+          <p className="text-xs text-muted-foreground">
+            {lead.findings?.pass2 ? "Includes the Google profile check." : "Google profile points (unclaimed, owner replies, Updates, photos, recent reviews) come from the Google profile check, run for businesses scoring 40 or more."}
+            {" "}Change point values in Settings → Opportunity score.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <Input className="h-8 max-w-xs" placeholder="Reason, e.g. no in-person service" value={reason} onChange={e => setReason(e.target.value)} />
             <Button size="sm" variant="outline" onClick={() => setAside.mutate(reason.trim() || "set aside by you")} disabled={setAside.isPending}>Set aside</Button>
@@ -443,6 +523,7 @@ function Details({ lead, isAdmin }: { lead: Lead; isAdmin: boolean }) {
     <div className="grid gap-4 bg-muted/40 p-4 text-sm md:grid-cols-2">
       <ScorePanel lead={lead} />
       <EmailPanel lead={lead} isAdmin={isAdmin} />
+      <GoogleProfilePanel lead={lead} isAdmin={isAdmin} />
       <div className="space-y-1">
         <h4 className="font-semibold">Website</h4>
         {!w?.url ? <p>No website found{w?.source === "none" ? " (Google lists none; one web search found no match)" : ""}.</p> : (
@@ -512,7 +593,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const { toast } = useToast();
   const { data, isLoading } = useQuery<{ search: SearchRow; leads: Lead[] }>({
     queryKey: ["/api/business-search", id],
-    refetchInterval: q => (q.state.data?.search.status === "running" || q.state.data?.search.status === "queued" || q.state.data?.search.emailJob?.running) ? 4000 : false,
+    refetchInterval: q => (q.state.data?.search.status === "running" || q.state.data?.search.status === "queued" || q.state.data?.search.emailJob?.running || q.state.data?.search.pass2Job?.running) ? 4000 : false,
   });
   const [listFilter, setListFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -521,6 +602,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const [open, setOpen] = useState<string | null>(null);
   const [recheckOpen, setRecheckOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
+  const [pass2Open, setPass2Open] = useState(false);
   const action = useMutation({
     mutationFn: async (what: "stop" | "resume" | "recheck") => (await apiRequest("POST", `/api/business-search/${id}/${what}`, what === "recheck" ? { confirm: true } : undefined)).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/business-search"] }),
@@ -569,6 +651,13 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             {s.alreadyFound ? ` · ${s.alreadyFound} already found in earlier searches, skipped` : ""}
           </p>
           {s.errorMessage && <p className="text-sm text-amber-700 dark:text-amber-400">{s.errorMessage}</p>}
+          {s.pass2Job && (
+            <p className="text-sm">
+              {s.pass2Job.running ? "Checking Google profiles: " : "Google profiles checked: "}
+              <b>{s.pass2Job.done}</b> of {s.pass2Job.total}
+              {s.pass2Job.note ? <span className="text-amber-700 dark:text-amber-400"> · {s.pass2Job.note}</span> : null}
+            </p>
+          )}
           {s.emailJob && (
             <p className="text-sm">
               {s.emailJob.running ? "Finding emails: " : "Email finding done: "}
@@ -582,6 +671,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             {isAdmin && (s.status === "stopped" || s.status === "failed") && <Button size="sm" onClick={() => action.mutate("resume")}><Play className="mr-2 h-4 w-4" />Resume</Button>}
             {isAdmin && (s.status === "done" || s.status === "stopped" || s.status === "failed") && <Button size="sm" variant="outline" onClick={() => setRecheckOpen(true)}>Check again</Button>}
             {isAdmin && s.status === "done" && !s.emailJob?.running && <Button size="sm" variant="outline" onClick={() => setFindOpen(true)} data-testid="button-find-emails">Find missing emails</Button>}
+            {isAdmin && s.status === "done" && !s.pass2Job?.running && <Button size="sm" variant="outline" onClick={() => setPass2Open(true)} data-testid="button-pass2">Check Google profiles (40+)</Button>}
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=csv`}><Download className="mr-2 h-4 w-4" />CSV</a></Button>
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=xlsx`}><Download className="mr-2 h-4 w-4" />Excel</a></Button>
           </div>
@@ -594,6 +684,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
       </Card>
 
       <FindEmailsDialog searchId={id} open={findOpen} onOpenChange={setFindOpen} />
+      <Pass2Dialog searchId={id} open={pass2Open} onOpenChange={setPass2Open} />
 
       <Dialog open={recheckOpen} onOpenChange={setRecheckOpen}>
         <DialogContent>

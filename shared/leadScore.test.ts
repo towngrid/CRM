@@ -102,3 +102,19 @@ test("chains: same name at two addresses", () => {
   assert.equal(chains.get("tocolo cantina"), 2);
   assert.equal(chains.has("green eats"), false);
 });
+
+test("Pass 2 (Google profile check) points", () => {
+  const pass2 = {
+    unclaimed: true, ownerRepliesOfNewest10: 1, reviewsChecked: 10, unansweredBadReview: true,
+    newestReviewDate: "2026-11-10T00:00:00Z", newestUpdateDate: null, ownerPhotoCount: 0,
+  };
+  const withP2 = base();
+  withP2.findings = { ...withP2.findings, pass2 };
+  const r = scoreLead(withP2, points);
+  assert.deepEqual(keys(r), ["few_owner_replies", "good_rating", "no_owner_photo_6m", "no_updates_90d", "recent_review", "unanswered_bad_review", "unclaimed"]);
+  assert.equal(r.score, 10 + 25 + 15 + 5 + 5 + 10 + 5);
+  // A claimed, active profile adds only "recent review".
+  const active = base();
+  active.findings = { ...active.findings, pass2: { unclaimed: false, ownerRepliesOfNewest10: 8, reviewsChecked: 10, unansweredBadReview: false, newestReviewDate: "2026-11-20T00:00:00Z", newestUpdateDate: "2026-11-01T00:00:00Z", ownerPhotoCount: 10 } };
+  assert.deepEqual(keys(scoreLead(active, points)), ["good_rating", "recent_review"]);
+});

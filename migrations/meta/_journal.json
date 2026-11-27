@@ -29,6 +29,13 @@
       "when": 1795565936705,
       "tag": "0003_opportunity_score",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795756647502,
+      "tag": "0004_industry_and_research",
+      "breakpoints": true
     }
   ]
 }

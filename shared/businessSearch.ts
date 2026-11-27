@@ -142,9 +142,11 @@ export interface CreditEstimate {
 export function estimateCredits(places: number, pages: number, list: LeadList, alreadyKnown = 0): CreditEstimate {
   const mapsCalls = places * pages;
   const maxBusinesses = mapsCalls * 20;
-  const perBusinessMax = list === "ordering" ? 3 : 2;
-  // Typically ~1 in 4 businesses has no website on Google and ~half need the social search.
-  const perBusinessLikely = (list === "ordering" ? 1 : 0) + 0.25 + 0.5;
+  // Website search (only when Google lists none: name + full address, then name + town), one
+  // Facebook/Instagram search, and for the Ordering list one delivery-apps search.
+  const perBusinessMax = list === "ordering" ? 4 : 3;
+  // Typically ~1 in 4 businesses has no website on Google (about 1.5 searches each) and ~half need the social search.
+  const perBusinessLikely = (list === "ordering" ? 1 : 0) + 0.25 * 1.5 + 0.5;
   const known = Math.min(Math.max(0, alreadyKnown), maxBusinesses);
   return {
     mapsCalls,
@@ -253,6 +255,8 @@ export interface WebsiteFindings {
   emails?: FoundEmail[];
   /** Their own site has a Locations page or lists 2+ addresses (Nov 27): a hint to check, not a knock-out. */
   possibleChain?: string | null;
+  /** The page where the contact or request form is (never submitted). */
+  contactFormUrl?: string | null;
 }
 
 export interface FoundEmail {
@@ -268,7 +272,7 @@ export interface FoundLink { url: string; page: string }
 
 export interface OrderingFindings {
   /** Links on their own site to delivery/ordering services, with the page each was on. */
-  siteLinks: { service: string; label: string; url: string; page: string }[];
+  siteLinks: { service: string; label: string; url: string; page: string; /** The link is for a different location of the business (Nov 27). */ otherLocation?: boolean }[];
   /** "Sends customers to delivery apps from own site". */
   sendsToApps: YesNoUnknown | "no_website";
   /** "Takes orders on own site". */
@@ -332,7 +336,7 @@ export function decideLeadType(input: LeadTypeInput): string {
     const o = input.ordering;
     if (o.ownOrdering === "yes") return "own_ordering_already";
     const onApps = o.appsFromSearch.length > 0 || o.sendsToApps === "yes" ||
-      o.siteLinks.some(l => ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace);
+      o.siteLinks.some(l => !l.otherLocation && ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace);
     return onApps ? "delivery_apps_no_own_ordering" : "no_online_ordering";
   }
   const social = input.hasFacebook || input.hasInstagram;

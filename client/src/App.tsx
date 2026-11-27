@@ -20,26 +20,9 @@ import AdminUsers from "@/pages/admin-users";
 import AdminSequenceTest from "@/pages/admin-sequence-test";
 import DealWorkspace from "@/pages/deal-workspace";
 import PayrollDetail from "@/pages/payroll-detail";
-import FormOutreach from "@/pages/form-outreach";
-import Leads from "@/pages/leads";
 import BusinessSearch from "@/pages/business-search";
+import PreVisitBrief from "@/pages/previsit-brief";
 import Sidebar from "@/components/layout/sidebar";
-
-function LegacyEnrichmentRedirect() {
-  const { id } = useParams<{ id?: string }>();
-  const [, setLocation] = useLocation();
-  useEffect(() => { setLocation(id ? `/leads/${encodeURIComponent(id)}` : "/leads?upload=1"); }, [id, setLocation]);
-  return null;
-}
-
-function LegacySearchReportRedirect() {
-  const [, setLocation] = useLocation();
-  useEffect(() => {
-    const batchId = new URLSearchParams(window.location.search).get("batchId");
-    setLocation(batchId ? `/leads/${encodeURIComponent(batchId)}` : "/leads");
-  }, [setLocation]);
-  return null;
-}
 
 function LegacyDiscoveryRedirect() {
   const [, setLocation] = useLocation();
@@ -75,11 +58,17 @@ function useSessionKeepAlive(active: boolean) {
 // From Replit Auth blueprint - Conditional routing based on auth state
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [location] = useLocation();
   useSessionKeepAlive(!!isAuthenticated);
 
   // Show landing page for unauthenticated users
   if (isLoading || !isAuthenticated) {
     return <Landing />;
+  }
+
+  // The printable Pre-visit brief is a page of its own, without the menu.
+  if (/^\/deal\/[^/]+\/brief\/?$/.test(location)) {
+    return <Route path="/deal/:id/brief" component={PreVisitBrief} />;
   }
 
   // Show authenticated app with sidebar
@@ -91,13 +80,13 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/search" component={BusinessSearch} />
           <Route path="/leads/search" component={LegacyDiscoveryRedirect} />
-          <Route path="/leads" component={Leads} />
-          <Route path="/leads/:id" component={Leads} />
           <Route path="/lead-discovery" component={LegacyDiscoveryRedirect} />
-          <Route path="/salon-enrichment/:id" component={LegacyEnrichmentRedirect} />
-          <Route path="/salon-enrichment" component={LegacyEnrichmentRedirect} />
-          <Route path="/salon-search-report" component={LegacySearchReportRedirect} />
-          <Route path="/form-outreach" component={FormOutreach} />
+          <Route path="/leads/:rest*" component={LegacyDiscoveryRedirect} />
+          <Route path="/leads" component={LegacyDiscoveryRedirect} />
+          <Route path="/salon-enrichment/:rest*" component={LegacyDiscoveryRedirect} />
+          <Route path="/salon-enrichment" component={LegacyDiscoveryRedirect} />
+          <Route path="/salon-search-report" component={LegacyDiscoveryRedirect} />
+          <Route path="/form-outreach" component={LegacyDiscoveryRedirect} />
           <Route path="/contacts" component={Contacts} />
           <Route path="/deal/:id" component={DealWorkspace} />
           <Route path="/deals" component={Deals} />

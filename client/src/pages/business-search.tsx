@@ -19,6 +19,8 @@ import {
   AI_EMAIL_TYPICAL_COST_USD, BUSINESS_TYPES, LONG_ISLAND_ZIPS, OTHER_BUSINESS_TYPE, allEmails, defaultListFor, townForZip,
   type CreditEstimate, type EmailLookup,
 } from "@shared/businessSearch";
+import { useIndustries } from "@/hooks/useIndustries";
+import { IndustryFilterSelect, matchesIndustry } from "@/components/industry-filter";
 import { LEAD_LISTS, LEAD_TYPES, leadListLabel, leadTypeLabel, type LeadList } from "@shared/leadTypes";
 import { ArrowLeft, ChevronDown, ChevronRight, Download, ExternalLink, Pause, Play, Search, X } from "lucide-react";
 
@@ -101,6 +103,7 @@ type Lead = {
   approvedAt: string | null; contactId: string | null; dealId: string | null;
   score: number | null; tier: string | null; scoreReasons: { key: string; points: number; text: string }[] | null;
   setAsideReason: string | null; setAsideByHand: boolean;
+  industryGroup: string | null; industryType: string | null;
 };
 
 function errorText(error: unknown): string {
@@ -236,7 +239,7 @@ function NewSearch({ onStarted, isAdmin }: { onStarted: (id: string) => void; is
               <p><b>{type === OTHER_BUSINESS_TYPE ? other : BUSINESS_TYPES.find(t => t.value === type)?.label}</b> in {estimate.places.map(placeLabel).join(", ")} · {leadListLabel(list)} list</p>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Google Maps: {estimate.estimate.mapsCalls} search{estimate.estimate.mapsCalls === 1 ? "" : "es"} (up to {estimate.estimate.maxBusinesses} businesses)</li>
-                <li>Checks: up to {estimate.estimate.perBusinessMax} searches per business (website if Google has none, Facebook/Instagram if the website doesn't link them{list === "ordering" ? ", delivery apps" : ""}). Reading their websites is free.</li>
+                <li>Checks: up to {estimate.estimate.perBusinessMax} searches per business (website if Google has none: name + address, then name + town; Facebook/Instagram if the website doesn't link them{list === "ordering" ? ", delivery apps" : ""}). Reading their websites is free.</li>
               </ul>
               {estimate.estimate.alreadyKnown > 0 && (
                 <p><b>{estimate.estimate.alreadyKnown}</b> businesses here were already found in your earlier searches. They'll be skipped (0 credits).
@@ -563,7 +566,7 @@ function Details({ lead, isAdmin }: { lead: Lead; isAdmin: boolean }) {
           <p>On delivery apps (search): {o.appsFromSearch?.length ? o.appsFromSearch.map((a: any) => <span key={a.service} className="mr-2"><LinkOr url={a.url} empty="" /></span>) : "none found"}</p>
           <p>Sends customers to delivery apps from own site: <b>{yesNo(o.sendsToApps)}</b></p>
           <p>Takes orders on own site: <b>{yesNo(o.ownOrdering)}</b>{o.ownOrderingPlatform ? ` (${o.ownOrderingPlatform})` : ""}</p>
-          {o.siteLinks?.length > 0 && <ul className="list-disc pl-5">{o.siteLinks.map((l: any) => <li key={l.service}>{l.label}: <LinkOr url={l.url} empty="" /> <span className="text-muted-foreground">on {l.page}</span></li>)}</ul>}
+          {o.siteLinks?.length > 0 && <ul className="list-disc pl-5">{o.siteLinks.map((l: any) => <li key={l.service}>{l.label}: <LinkOr url={l.url} empty="" /> <span className="text-muted-foreground">on {l.page}</span>{l.otherLocation && <Badge variant="outline" className="ml-1">for another location: not counted</Badge>}</li>)}</ul>}
           {o.googleServiceOptions && <p>Google: {Object.entries(o.googleServiceOptions).map(([k, v]) => `${k.replace(/_/g, " ")} ${v ? "yes" : "no"}`).join(", ")}</p>}
           {f.jsLoaded && (o.sendsToApps === "unknown" || o.ownOrdering === "unknown") && <p className="text-muted-foreground">This site loads buttons with JavaScript, so "Unknown" means: look by hand.</p>}
         </div>
@@ -605,6 +608,8 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
   const [typeFilter, setTypeFilter] = useState("all");
   const [townFilter, setTownFilter] = useState("all");
   const [tierFilter, setTierFilter] = useState("all");
+  const [industryFilter, setIndustryFilter] = useState("all");
+  const { industries } = useIndustries();
   const [open, setOpen] = useState<string | null>(null);
   const [recheckOpen, setRecheckOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
@@ -622,6 +627,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
     .filter(l => listFilter === "all" || l.leadList === listFilter)
     .filter(l => typeFilter === "all" || l.leadType === typeFilter)
     .filter(l => townFilter === "all" || l.town === townFilter)
+    .filter(l => matchesIndustry(industryFilter, l.industryGroup, l.industryType))
     .filter(l => tierFilter === "all" || (tierFilter === "aside" ? !!l.setAsideReason : (l.tier === tierFilter && !l.setAsideReason)))
     // Best opportunities first; set-aside businesses last; then lead type and review count.
     .sort((a, b) => (a.setAsideReason ? 1 : 0) - (b.setAsideReason ? 1 : 0) || (b.score ?? -1) - (a.score ?? -1) ||
@@ -698,7 +704,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             <DialogTitle>Check these {s.businessesFound} businesses again?</DialogTitle>
             <DialogDescription>Google Maps isn't searched again. Searches already made are reused for free; only new ones cost credits.</DialogDescription>
           </DialogHeader>
-          <p className="text-sm">At most <b>{s.businessesFound * (ordering ? 3 : 2)}</b> credits; usually far fewer. Credits used so far: {s.creditsUsed}.</p>
+          <p className="text-sm">At most <b>{s.businessesFound * (ordering ? 4 : 3)}</b> credits; usually far fewer. Credits used so far: {s.creditsUsed}.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRecheckOpen(false)}>Cancel</Button>
             <Button onClick={() => { setRecheckOpen(false); action.mutate("recheck"); }}>Yes, check again</Button>
@@ -725,6 +731,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             <SelectItem value="aside">Set aside ({tierCounts.aside})</SelectItem>
           </SelectContent>
         </Select>
+        <IndustryFilterSelect value={industryFilter} onChange={setIndustryFilter} industries={industries} className="w-56" />
         <Select value={townFilter} onValueChange={setTownFilter}>
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="all">All towns</SelectItem>{towns.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
@@ -736,7 +743,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-6" /><TableHead>Score</TableHead><TableHead>Name</TableHead><TableHead>Town</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Lead type</TableHead>
+              <TableHead className="w-6" /><TableHead>Score</TableHead><TableHead>Name</TableHead><TableHead>Industry</TableHead><TableHead>Town</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Lead type</TableHead>
               <TableHead>Website</TableHead><TableHead>Facebook</TableHead><TableHead>Instagram</TableHead>
               {ordering && <><TableHead>Delivery apps</TableHead><TableHead>Own ordering</TableHead></>}
               <TableHead>Rating</TableHead><TableHead>Reviews</TableHead><TableHead>Still open?</TableHead>
@@ -749,6 +756,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                   <TableCell>{open === l.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
                   <TableCell>{l.checkStatus === "checked" ? <TierBadge lead={l} /> : "—"}</TableCell>
                   <TableCell className="font-medium">{l.name}{l.contactId && <Badge className="ml-2" variant="outline">Approved</Badge>}{l.findings?.website?.possibleChain && !l.setAsideReason && <Badge className="ml-2" variant="outline" title={l.findings.website.possibleChain}>Possible chain</Badge>}</TableCell>
+                  <TableCell className="text-sm">{l.industryType ?? l.industryGroup ?? "—"}</TableCell>
                   <TableCell>{l.town ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{l.phone ?? "—"}</TableCell>
                   <TableCell>{l.checkStatus === "checked" ? emailCell(l) : "—"}</TableCell>
@@ -762,11 +770,11 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                   <TableCell>{l.stillOpenFlag ? <Badge variant="destructive">Check</Badge> : ""}</TableCell>
                 </TableRow>
                 {open === l.id && (
-                  <TableRow><TableCell colSpan={ordering ? 15 : 13} className="p-0"><Details lead={l} isAdmin={isAdmin} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={ordering ? 16 : 14} className="p-0"><Details lead={l} isAdmin={isAdmin} /></TableCell></TableRow>
                 )}
               </Fragment>
             ))}
-            {shown.length === 0 && <TableRow><TableCell colSpan={15} className="py-8 text-center text-muted-foreground">{s.status === "running" || s.status === "queued" ? "Searching Google Maps…" : "No businesses match."}</TableCell></TableRow>}
+            {shown.length === 0 && <TableRow><TableCell colSpan={16} className="py-8 text-center text-muted-foreground">{s.status === "running" || s.status === "queued" ? "Searching Google Maps…" : "No businesses match."}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>

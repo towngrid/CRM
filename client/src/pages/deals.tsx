@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { Deal, Contact, User, EmailSequenceLog, EmailSequence, InboxMessage } from "@shared/schema";
 import { getCommissionAmounts } from "@shared/utils";
 import { useDealPlans } from "@/hooks/useDealPlans";
+import { useIndustries } from "@/hooks/useIndustries";
+import { IndustryFilterSelect, matchesIndustry } from "@/components/industry-filter";
 import { matchesPipelineEmailFilters, pipelineSequenceLabels } from "@shared/pipelineEmailSummary";
 import type { PipelineEmailSummaries } from "@shared/pipelineEmailSummary";
 import PipelineEmailStatus from "@/components/deals/pipeline-email-status";
@@ -53,6 +55,8 @@ export default function Deals() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sequenceFilter, setSequenceFilter] = useState("all");
   const [historyFilter, setHistoryFilter] = useState("all");
+  const [industryFilter, setIndustryFilter] = useState("all");
+  const { industries } = useIndustries();
   const initialFilterUserId = isAdmin ? new URLSearchParams(window.location.search).get("filterUserId") || "" : "";
   const [filterUserId, setFilterUserId] = useState(initialFilterUserId);
 
@@ -452,6 +456,14 @@ export default function Deals() {
       )
     );
 
+    // Industry comes from the deal's contact (deals have no industry of their own).
+    if (industryFilter !== "all") {
+      sorted = sorted.filter(deal => {
+        const c = contacts?.find(x => x.id === deal.contactId);
+        return matchesIndustry(industryFilter, c?.industryGroup, c?.industryType);
+      });
+    }
+
     // Default sort: open deals first (by stage), then newest first (by createdAt)
     if (!sortColumn) {
       sorted.sort((a, b) => {
@@ -510,7 +522,7 @@ export default function Deals() {
     });
 
     return sorted;
-  }, [deals, sortColumn, sortDirection, contacts, searchTerm, emailSummaries, sequenceFilter, historyFilter]);
+  }, [deals, sortColumn, sortDirection, contacts, searchTerm, emailSummaries, sequenceFilter, historyFilter, industryFilter]);
 
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column) {
@@ -567,6 +579,7 @@ export default function Deals() {
                 ))}
               </SelectContent>
             </Select>
+            <IndustryFilterSelect value={industryFilter} onChange={setIndustryFilter} industries={industries} className="w-[200px]" />
             <Select value={historyFilter} onValueChange={setHistoryFilter}>
               <SelectTrigger className="w-[190px]" aria-label="Filter by recorded sends" data-testid="filter-recorded-sends">
                 <SelectValue placeholder="All send history" />

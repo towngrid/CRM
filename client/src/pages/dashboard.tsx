@@ -77,16 +77,16 @@ export default function Dashboard() {
       <main className="flex-1 overflow-y-auto p-6 bg-muted/30" data-testid="dashboard-content">
         <MetricsGrid />
 
-        <Card className="mt-6 border-primary/30 bg-primary/[0.03]" data-testid="salon-enrichment-entry">
+        <Card className="mt-6 border-primary/30 bg-primary/[0.03]" data-testid="business-search-entry">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="rounded-lg bg-primary/10 p-2 text-primary">
                 <Upload className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="font-semibold">Enrich a salon list</h2>
+                <h2 className="font-semibold">Find businesses</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Upload a CSV or Excel file to find website contact details. Start with a 100-salon pilot, review the evidence, then continue in batches.
+                  Pick a type of business and Long Island towns or zip codes. The CRM checks each one's website, social and ordering, scores the opportunity, and shows the cost before it runs.
                 </p>
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5" />
@@ -94,9 +94,9 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <Button className="shrink-0" onClick={() => setLocation("/salon-enrichment")}>
+            <Button className="shrink-0" onClick={() => setLocation("/search")}>
               <Upload className="mr-2 h-4 w-4" />
-              Upload salon list
+              Business Search
             </Button>
           </CardContent>
         </Card>

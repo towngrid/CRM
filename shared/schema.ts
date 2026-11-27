@@ -58,6 +58,9 @@ export const contacts = pgTable("contacts", {
   usesSoftware: text("uses_software"), // ESyCRM leftover, no longer shown; kept so old data isn't dropped
   leadList: text("lead_list"), // get_seen, ordering (shared/leadTypes.ts)
   leadType: text("lead_type"), // shared/leadTypes.ts
+  industryGroup: text("industry_group"), // shared/industries.ts, e.g. "Home services"
+  industryType: text("industry_type"), // e.g. "Landscapers"
+  research: jsonb("research"), // Pre-visit research fields and the hand checklist (shared/research.ts)
   hasWebsite: text("has_website"), // Yes, No, Unknown
   websiteUrl: text("website_url"),
   contactRequestFormUrl: text("contact_request_form_url"),
@@ -762,6 +765,8 @@ export const businessLeads = pgTable("business_leads", {
   googleStatus: text("google_status"), // open, permanently_closed, temporarily_closed, unknown
   leadList: text("lead_list").notNull(),
   leadType: text("lead_type"),
+  industryGroup: text("industry_group"), // from the search type (shared/industries.ts)
+  industryType: text("industry_type"),
   checkStatus: text("check_status").notNull().default("pending"), // pending, checked, failed
   checkError: text("check_error"),
   findings: jsonb("findings"), // website, social, ordering, stillOpen details (shared/businessSearch.ts)
@@ -798,4 +803,14 @@ export const scorePoints = pgTable("score_points", {
   key: text("key").primaryKey(),
   points: integer("points").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Industry list (Snap spec Part 2), edited by an admin in Settings next to Plans & prices.
+export const industries = pgTable("industries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupName: text("group_name").notNull(),
+  typeName: text("type_name").notNull(),
+  searchType: text("search_type"), // matching Business Search type, if any
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: text("active").notNull().default("true"),
 });

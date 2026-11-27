@@ -30,7 +30,6 @@ import {
 const navigation = [
   { name: "Dashboard",       href: "/",                   icon: BarChart3 },
   { name: "Business Search", href: "/search",              icon: Search },
-  { name: "Form Follow-ups", href: "/form-outreach",       icon: ClipboardList },
   { name: "Contacts",        href: "/contacts",           icon: Users },
   { name: "Pipeline",        href: "/deals",              icon: Handshake },
   { name: "Tasks",           href: "/tasks",              icon: CheckSquare },

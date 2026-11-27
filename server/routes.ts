@@ -47,6 +47,8 @@ import { rejectResearchExecution, isResearchDirectoryRow, RESEARCH_READ_ONLY } f
 import { pipelineEmailQueryScope } from "./pipelineEmailSummary";
 import { registerDealPlanRoutes, seedDealPlans } from "./dealPlanRoutes";
 import { registerBusinessSearchRoutes } from "./businessSearch/routes";
+import { registerIndustryRoutes } from "./industryRoutes";
+import { registerResearchRoutes } from "./researchRoutes";
 import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE, getSerpApiKey } from "./appConfig";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
 import { DEAL_STAGE_VALUES, stageLabel } from "@shared/dealStages";
@@ -180,6 +182,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await seedDealPlans();
   registerDealPlanRoutes(app, isAuthenticated, isAdmin);
   registerBusinessSearchRoutes(app, isAuthenticated, isAdmin);
+  registerIndustryRoutes(app, isAuthenticated, isAdmin);
+  registerResearchRoutes(app, isAuthenticated);
 
   // Helper function to get user ID or null for admin (admin sees all data)
   const getUserIdForQuery = (user: any): string | null => {
@@ -2401,6 +2405,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobTitle: contact.jobTitle,
         "List": leadListLabel(contact.leadList),
         "Lead type": leadTypeLabel(contact.leadType),
+        "Industry group": contact.industryGroup ?? "",
+        "Industry type": contact.industryType ?? "",
         "Has Web Site": contact.hasWebsite,
         "Web Site Address": contact.websiteUrl,
         "Contact Request Form URL": contact.contactRequestFormUrl,

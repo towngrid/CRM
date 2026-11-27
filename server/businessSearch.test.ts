@@ -90,14 +90,14 @@ test("places, towns and duplicates", () => {
 test("credit estimate: Maps per place, then up to 3 per business on the Ordering list", () => {
   const e = estimateCredits(1, 1, "ordering");
   assert.equal(e.mapsCalls, 1);
-  assert.equal(e.max, 1 + 20 * 3);
+  assert.equal(e.max, 1 + 20 * 4);
   assert.ok(e.likely < e.max && e.likely > 20);
-  assert.equal(estimateCredits(2, 1, "get_seen").max, 2 + 40 * 2);
+  assert.equal(estimateCredits(2, 1, "get_seen").max, 2 + 40 * 3);
   // 19 Glen Cove restaurants already checked: asking for "up to 40" only expects ~21 new ones.
   const again = estimateCredits(1, 2, "ordering", 19);
   assert.equal(again.alreadyKnown, 19);
-  assert.equal(again.likely, Math.ceil(2 + 21 * 1.75));
-  assert.equal(again.max, 2 + 40 * 3, "the worst case still assumes all new");
+  assert.equal(again.likely, Math.ceil(2 + 21 * 1.875));
+  assert.equal(again.max, 2 + 40 * 4, "the worst case still assumes all new");
   assert.equal(estimateCredits(1, 1, "ordering", 50).alreadyKnown, 20, "capped at what one page returns");
 });
 
@@ -288,4 +288,45 @@ test("the website check records a possible chain from the pages it already reads
   const runtime = fakeRuntime({ "https://chain.example/": { status: 200, body: home }, "https://chain.example/menu": { status: 200, body: "<p>menu</p>" } }, opened);
   const result = await checkWebsite("https://chain.example/", "google", runtime);
   assert.match(result.website.possibleChain ?? "", /Locations page/);
+});
+
+test("Step 4: delivery links for another location don't count; Slice-built sites are own ordering", async () => {
+  const { linkIsForAnotherLocation, orderingFromSite } = await import("./businessSearch/website");
+  const glenCove = { town: "Glen Cove", lat: 40.8623, lng: -73.6337 };
+  // Plado's group site linked to its Manhattan restaurant on Grubhub and Uber Eats.
+  assert.equal(linkIsForAnotherLocation("https://www.grubhub.com/restaurant/plado-tasting-bar-192-e-2nd-st-new-york/1202586", glenCove), true);
+  const pl = Buffer.from(JSON.stringify({ address: "L'angolo", latitude: 40.71742, longitude: -74.01064 })).toString("base64");
+  assert.equal(linkIsForAnotherLocation(`https://www.ubereats.com/store/plado-tasting-bar/LMuC?pl=${encodeURIComponent(pl)}`, glenCove), true);
+  assert.equal(linkIsForAnotherLocation("https://www.doordash.com/store/green-eats-glen-cove-33662943/", glenCove), false);
+  assert.equal(linkIsForAnotherLocation("https://www.doordash.com/store/joes-pizza-123/", glenCove), false, "no town in the link = counted");
+  const site = (links: any[], owner: string | null = null) => ({
+    website: { url: "https://x.example", googleButton: "ok", loads: "yes", ownedByOrderingCompany: owner } as any,
+    socialLinks: {}, orderingLinks: links, jsLoaded: false,
+  });
+  const nyc = { service: "grubhub", label: "Grubhub", url: "https://www.grubhub.com/restaurant/x-192-e-2nd-st-new-york/1", page: "https://x.example/" };
+  const o = orderingFromSite(site([nyc]), glenCove);
+  assert.equal(o.sendsToApps, "no");
+  assert.equal(o.siteLinks[0].otherLocation, true);
+  const slice = orderingFromSite(site([], "Slice"), glenCove);
+  assert.equal(slice.ownOrdering, "yes");
+  assert.equal(slice.ownOrderingPlatform, "Slice");
+});
+
+test("Step 4: research filled from a Business Search result", async () => {
+  const { researchFromLead, greetingName, readResearch } = await import("@shared/research");
+  const r = researchFromLead({
+    name: "The Metropolitan", leadList: "ordering", leadType: "delivery_apps_no_own_ordering", rating: 4.7, reviewCount: 71,
+    googleStatus: "open", deliveryApps: "Grubhub, Uber Eats",
+    findings: { website: { contactForm: "no", url: null }, searchEmails: [{ email: "x@gmail.com", url: "https://site", title: "t" }],
+      pass2: { unclaimed: true, ownerRepliesOfNewest10: 0, reviewsChecked: 10, unansweredBadReview: false, newestUpdateDate: null, ownerPhotoCount: 0, newestReviewDate: "2026-09-02T00:00:00Z" } },
+    scoreReasons: [{ key: "unclaimed", points: 25, text: "Google profile unclaimed" }, { key: "good_rating", points: 10, text: "rating 4.7 / 71 reviews" }],
+  });
+  assert.equal(r.stillOpen, "Open");
+  assert.match(r.googleProfile, /UNCLAIMED/);
+  assert.equal(r.oneThing, "Google profile unclaimed");
+  assert.equal(r.bestPlan, "Restaurant Ordering");
+  assert.equal(r.emailSource, "https://site");
+  assert.equal(greetingName(r, "The Metropolitan"), "The Metropolitan team", "no Supported owner name: greet the team");
+  assert.equal(greetingName({ ...r, ownerFirstName: "Rekha", ownerStatus: "Supported" }, "The Metropolitan"), "Rekha");
+  assert.equal(readResearch(null).ownerStatus, "Not confirmed");
 });

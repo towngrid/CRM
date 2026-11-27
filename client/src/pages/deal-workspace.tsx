@@ -35,6 +35,7 @@ import { getCommissionAmounts } from "@shared/utils";
 import { useDealPlans } from "@/hooks/useDealPlans";
 import { pipelineContactOwnerName } from "@shared/pipelineContactName";
 import ContactForm from "@/components/contacts/contact-form";
+import ResearchPanel from "@/components/deals/research-panel";
 import ContactOwnerNameSearch from "@/components/contacts/contact-owner-name-search";
 import DealTaskPanel from "@/components/tasks/deal-task-panel";
 import DealSequencePanel from "@/components/email-sequences/deal-sequence-panel";
@@ -530,6 +531,7 @@ export default function DealWorkspace() {
                 <TabsTrigger value="email-history" className="text-xs" data-testid="tab-email-history">Email History</TabsTrigger>
                 <TabsTrigger value="sequences" className="text-xs" data-testid="tab-sequences">Sequences</TabsTrigger>
                 <TabsTrigger value="notes" className="text-xs" data-testid="tab-notes">Notes</TabsTrigger>
+                <TabsTrigger value="research" className="text-xs" data-testid="tab-research">Research</TabsTrigger>
               </TabsList>
             </div>
 
@@ -659,6 +661,10 @@ export default function DealWorkspace() {
                   </p>
                 </div>
               </TabsContent>
+
+              <TabsContent value="research" className="m-0 p-4 min-h-full">
+                {data?.contact ? <ResearchPanel contactId={data.contact.id} dealId={dealId!} /> : <p className="text-sm text-muted-foreground">Link a contact to this deal to keep research.</p>}
+              </TabsContent>
             </div>
 
             {/* Log action bar */}
@@ -672,6 +678,11 @@ export default function DealWorkspace() {
               <Button variant="outline" size="sm" onClick={() => { setLogType("note"); setActiveTab("activity"); }} className="flex items-center gap-1.5 text-xs" data-testid="button-log-note">
                 <StickyNote className="h-3.5 w-3.5" /> Note
               </Button>
+              {data?.contact && (
+                <Button variant="outline" size="sm" asChild className="flex items-center gap-1.5 text-xs" data-testid="button-previsit-brief">
+                  <a href={`/deal/${dealId}/brief`} target="_blank" rel="noreferrer"><FileText className="h-3.5 w-3.5" /> Pre-visit brief</a>
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => { setLogType("site_visit"); setActiveTab("activity"); }} className="flex items-center gap-1.5 text-xs" data-testid="button-log-site-visit">
                 <Home className="h-3.5 w-3.5" /> Site Visit
               </Button>

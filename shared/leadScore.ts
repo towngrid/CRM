@@ -150,7 +150,7 @@ export function scoreLead(input: ScoreInput, points: ScorePoint[]): ScoreResult 
   if (input.leadList === "ordering" && ordering) {
     const appLabels = new Set<string>([
       ...(ordering.appsFromSearch ?? []).map((a: any) => a.service),
-      ...(ordering.siteLinks ?? []).map((l: any) => l.service),
+      ...(ordering.siteLinks ?? []).filter((l: any) => !l.otherLocation).map((l: any) => l.service),
     ]);
     const bigApps = ["doordash", "ubereats", "grubhub", "seamless", "postmates"].filter(k => appLabels.has(k));
     if (bigApps.length && ordering.ownOrdering !== "yes") {

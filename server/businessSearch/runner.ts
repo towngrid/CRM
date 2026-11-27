@@ -13,6 +13,8 @@ import { SerpBudgetStop, serpRequest } from "./serp";
 import { checkWebsite, emailsInPlainText, orderingFromSite, type SiteCheck } from "./website";
 import { emailBelongsToBusiness, type EmailLookup, type SearchEmail } from "@shared/businessSearch";
 import { rescoreUser } from "./score";
+import { listIndustries } from "../industryRoutes";
+import { industryForSearch } from "@shared/industries";
 
 const HOURLY_WAIT_MS = 5 * 60_000;
 const running = new Set<string>();
@@ -160,6 +162,7 @@ async function mapsPhase(search: BusinessSearch): Promise<void> {
     if (keys.some(k => earlier.has(k))) { alreadyFound++; continue; }
     unique.push(b);
   }
+  const industry = industryForSearch(await listIndustries(true), search.businessType, search.businessTypeOther);
   await db.transaction(async tx => {
     if (unique.length) {
       await tx.insert(businessLeads).values(unique.map(b => ({
@@ -169,6 +172,7 @@ async function mapsPhase(search: BusinessSearch): Promise<void> {
         googlePlaceId: b.placeId, googleDataId: b.dataId, websiteUrl: b.website,
         googleStatus: googleStatusOf(b.raw), stillOpenFlag: ["permanently_closed", "temporarily_closed"].includes(googleStatusOf(b.raw)),
         leadList: search.leadList, mapsResult: b.raw,
+        industryGroup: industry?.group ?? null, industryType: industry?.type ?? null,
       })));
     }
     await tx.update(businessSearches).set({ businessesFound: unique.length, outsideArea: outside, duplicatesRemoved: dups, alreadyFound })
@@ -260,17 +264,26 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
   const nameSearchResults: Organic[] = []; // the "name + town" search only, for the still-open dates
   let aiSummary: string | null = null;
 
-  // 1. Website: Google's, or one web search when Google lists none.
+  // 1. Website: Google's; when Google lists none, search the name + full street address first, then
+  //    name + town (PRE-VISIT-RESEARCH.md: a name + town search alone missed Lorenzo's website).
   let site: SiteCheck;
   if (lead.websiteUrl) {
     site = await checkWebsite(lead.websiteUrl, "google");
   } else {
-    const data = await serpRequest(search.id, { engine: "google", q: `"${lead.name}" ${where}`, num: "10", hl: "en", gl: "us" });
-    const results = organics(data);
-    webResults.push(...results);
-    nameSearchResults.push(...results);
-    aiSummary = aiOverviewText(data);
-    const match = results.find(r => isOwnSiteCandidate(r.link, lead.name) && resultMatchesBusiness(r, who));
+    const queries = [
+      lead.address ? `"${lead.name}" ${lead.address}` : null,
+      `"${lead.name}" ${where}`,
+    ].filter((q): q is string => !!q);
+    let match: Organic | undefined;
+    for (const q of queries) {
+      const data = await serpRequest(search.id, { engine: "google", q, num: "10", hl: "en", gl: "us" });
+      const results = organics(data);
+      webResults.push(...results);
+      nameSearchResults.push(...results);
+      aiSummary = aiSummary ?? aiOverviewText(data);
+      match = results.find(r => isOwnSiteCandidate(r.link, lead.name) && resultMatchesBusiness(r, who));
+      if (match) break;
+    }
     site = await checkWebsite(match ? match.link : null, match ? "search" : "none");
     if (!match) site.website.googleButton = "missing";
   }
@@ -309,7 +322,8 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
     });
     const results = organics(data);
     webResults.push(...results);
-    const fromSite = orderingFromSite(site);
+    const gps = local.gps_coordinates ?? {};
+    const fromSite = orderingFromSite(site, { town: lead.town, lat: gps.latitude ?? null, lng: gps.longitude ?? null });
     const apps = appsFromResults(results, who);
     // A delivery-app link that Google lists as the "website" counts as being on that app.
     for (const l of fromSite.siteLinks) {
@@ -360,7 +374,7 @@ async function checkLead(search: BusinessSearch, lead: BusinessLead): Promise<vo
   const deliveryApps = ordering
     ? Array.from(new Set([
         ...ordering.appsFromSearch.map(a => a.label),
-        ...ordering.siteLinks.filter(l => ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace).map(l => l.label),
+        ...ordering.siteLinks.filter(l => !l.otherLocation && ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace).map(l => l.label),
       ])).join(", ")
     : null;
 

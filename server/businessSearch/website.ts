@@ -2,7 +2,7 @@
 // Instagram, Yelp, BBB or delivery-app pages, and never follows a redirect onto them.
 import { fetchPublicPage, RedirectRefused, type SalonFetchRuntime } from "../salonPublicFetch";
 import {
-  ORDERING_SERVICES, SOCIAL_SITES, hostMatches, hostOf, isNeverOpenUrl, orderingServiceForUrl,
+  LONG_ISLAND_ZIPS, ORDERING_SERVICES, SOCIAL_SITES, hostMatches, hostOf, isNeverOpenUrl, orderingServiceForUrl,
   type FoundEmail, type FoundLink, type OrderingFindings, type SocialKey, type WebsiteFindings, type YesNoUnknown,
 } from "@shared/businessSearch";
 
@@ -368,6 +368,7 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
   website.builder = siteBuilder(home.html);
   website.ownedByOrderingCompany = orderingCompanyOwner(home.html, home.finalUrl);
   let form = hasContactForm(home.html);
+  let formPage: string | null = form ? home.finalUrl : null;
   const siteHost = hostOf(home.finalUrl);
   const emails: FoundEmail[] = emailsIn(home.html, home.finalUrl, siteHost);
   const addEmails = (list: FoundEmail[]) => { for (const e of list) if (!emails.some(x => x.email === e.email)) emails.push(e); };
@@ -381,7 +382,7 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
     try {
       const p = await readPage(page, runtime);
       website.pagesRead.push(p.finalUrl);
-      if (!form && hasContactForm(p.html)) form = true;
+      if (!form && hasContactForm(p.html)) { form = true; formPage = p.finalUrl; }
       addEmails(emailsIn(p.html, p.finalUrl, siteHost));
       locations = locations ?? locationsLink(p.html, p.finalUrl);
       for (const a of streetAddresses(p.html)) addresses.add(a);
@@ -406,21 +407,73 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
   }
   website.contactForm = form ? "yes" : (result.jsLoaded ? "unknown" : "no");
   website.emails = sortEmails(emails).slice(0, 5);
+  website.contactFormUrl = formPage;
   website.possibleChain = possibleChainReason(locations, Array.from(addresses));
   return result;
 }
 
 /** Steps 6b and 7: what the business's own site says about ordering. */
-export function orderingFromSite(check: SiteCheck): Pick<OrderingFindings, "siteLinks" | "sendsToApps" | "ownOrdering" | "ownOrderingPlatform"> {
-  const w = check.website;
-  if (!w.url || w.googleButton === "social") {
-    return { siteLinks: check.orderingLinks, sendsToApps: "no_website", ownOrdering: "no_website", ownOrderingPlatform: null };
+// ── Delivery links for another location (Nov 27: Plado's group site linked to its Manhattan restaurant) ──
+const OTHER_PLACE_WORDS = [
+  ...LONG_ISLAND_ZIPS.map(z => z.town),
+  "New York", "Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", "NYC", "Jersey City", "Hoboken",
+  "Yonkers", "White Plains", "Stamford", "Newark",
+];
+const slug = (s: string) => s.toLowerCase().replace(/['’.]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function kmBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+/** Uber Eats store links carry the store's location, base64-encoded, in "pl". */
+function uberEatsPlace(url: URL): { lat: number; lng: number } | null {
+  const pl = url.searchParams.get("pl");
+  if (!pl) return null;
+  try {
+    const json = JSON.parse(decodeURIComponent(Buffer.from(pl, "base64").toString("utf8")));
+    return typeof json.latitude === "number" && typeof json.longitude === "number" ? { lat: json.latitude, lng: json.longitude } : null;
+  } catch {
+    return null;
   }
-  const links = check.orderingLinks;
-  const marketplace = links.filter(l => ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace);
-  const own = links.filter(l => ORDERING_SERVICES.find(s => s.key === l.service)?.ownOrdering);
+}
+
+export interface PlaceOfBusiness { town: string | null; lat?: number | null; lng?: number | null }
+
+/**
+ * Does a delivery-app link point to a different location of the business? Yes when the link names
+ * another town and not this one (Grubhub "…-192-e-2nd-st-new-york"), or carries a store location
+ * more than 25 km away (Uber Eats). Unsure = no.
+ */
+export function linkIsForAnotherLocation(link: string, place: PlaceOfBusiness): boolean {
+  let url: URL;
+  try { url = new URL(link); } catch { return false; }
+  if (place.lat != null && place.lng != null) {
+    const p = uberEatsPlace(url);
+    if (p) return kmBetween(p, { lat: place.lat, lng: place.lng }) > 25;
+  }
+  const path = `-${slug(decodeURIComponent(url.pathname))}-`;
+  if (place.town && path.includes(`-${slug(place.town)}-`)) return false;
+  return OTHER_PLACE_WORDS.some(w => w !== place.town && path.includes(`-${slug(w)}-`));
+}
+
+export function orderingFromSite(check: SiteCheck, place?: PlaceOfBusiness): Pick<OrderingFindings, "siteLinks" | "sendsToApps" | "ownOrdering" | "ownOrderingPlatform"> {
+  const w = check.website;
+  // Mark links that are for another location: they don't count as this business being on the apps.
+  const links = check.orderingLinks.map(l =>
+    place && ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace && linkIsForAnotherLocation(l.url, place) ? { ...l, otherLocation: true } : l);
+  if (!w.url || w.googleButton === "social") {
+    return { siteLinks: links, sendsToApps: "no_website", ownOrdering: "no_website", ownOrderingPlatform: null };
+  }
+  const here = links.filter(l => !l.otherLocation);
+  const marketplace = here.filter(l => ORDERING_SERVICES.find(s => s.key === l.service)?.marketplace);
+  const own = here.filter(l => ORDERING_SERVICES.find(s => s.key === l.service)?.ownOrdering);
+  // PRE-VISIT-RESEARCH.md: a site built by Slice, ChowNow, Owner.com and the like means the business
+  // already takes its own orders through that platform.
+  const siteOwner = ORDERING_SERVICES.find(s => s.buildsWebsites && s.label === w.ownedByOrderingCompany);
   const unreadable = w.loads !== "yes" && w.googleButton !== "ordering_site";
   const sendsToApps: YesNoUnknown = marketplace.length > 0 ? "yes" : (unreadable || check.jsLoaded ? "unknown" : "no");
-  const ownOrdering: YesNoUnknown = own.length > 0 ? "yes" : (unreadable || check.jsLoaded ? "unknown" : "no");
-  return { siteLinks: links, sendsToApps, ownOrdering, ownOrderingPlatform: own[0]?.label ?? null };
+  const ownOrdering: YesNoUnknown = own.length > 0 || siteOwner ? "yes" : (unreadable || check.jsLoaded ? "unknown" : "no");
+  return { siteLinks: links, sendsToApps, ownOrdering, ownOrderingPlatform: own[0]?.label ?? siteOwner?.label ?? null };
 }

@@ -20,6 +20,7 @@ import { serpAccount } from "./serp";
 import { isRunning, markInterruptedSearches, resetForRecheck, runSearch } from "./runner";
 import { loadScorePoints, rescoreEveryone, rescoreUser, saveScorePoints } from "./score";
 import { aiKeyDiagnostics, aiKeySet, aiSpentThisMonth, findEmailFor } from "./emailFinder";
+import { researchFromLead } from "@shared/research";
 import { runPass2, savePass2 } from "./pass2";
 import { DEFAULT_SCORE_POINTS, reasonsText } from "@shared/leadScore";
 
@@ -118,6 +119,8 @@ export function leadRow(lead: BusinessLead) {
     "Owner photos on Google": f.pass2 ? f.pass2.ownerPhotoCount : "",
     Address: lead.address ?? "",
     Category: lead.googleCategory ?? "",
+    "Industry group": lead.industryGroup ?? "",
+    "Industry type": lead.industryType ?? "",
   };
 }
 
@@ -495,10 +498,14 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
         zipCode: zip ?? lead.zip,
         leadList: lead.leadList,
         leadType: lead.leadType,
+        industryGroup: lead.industryGroup,
+        industryType: lead.industryType,
+        research: researchFromLead(lead),
         hasWebsite: row.Website === "No Website found" ? "No" : "Yes",
         websiteUrl: row.Website === "No Website found" ? null : lead.websiteUrl,
         facebookUrl: lead.facebookUrl,
         instagramHandle: lead.instagramUrl,
+        contactRequestFormUrl: (lead.findings as any)?.website?.contactFormUrl ?? null,
         leadSource: "Google Search",
         notes,
         status: "active",

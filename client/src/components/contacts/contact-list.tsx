@@ -17,6 +17,7 @@ import type { Contact, Deal, User as UserType } from "@shared/schema";
 import { getContactDisplay } from "@/lib/contact-display";
 import { contactDeletionLabel } from "@/lib/contact-deletion";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
+import { industryLabel } from "@shared/industries";
 import { stageLabel, stagePillClass } from "@shared/dealStages";
 
 interface ContactListProps {
@@ -198,6 +199,7 @@ export default function ContactList({ contacts, deals, isLoading, isAdmin, admin
                 </TableHead>
                 <SortableHead col="name" label="Contact" />
                 <SortableHead col="company" label="Company" />
+                <TableHead>Industry</TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
@@ -256,6 +258,7 @@ export default function ContactList({ contacts, deals, isLoading, isAdmin, admin
                     </div>
                   </TableCell>
                   <TableCell>{contact.company || "-"}</TableCell>
+                  <TableCell className="text-sm">{contact.industryGroup || contact.industryType ? industryLabel(contact.industryGroup, contact.industryType) : "-"}</TableCell>
                   <TableCell>
                     <div className="max-w-[150px] truncate" title={contact.address || ""}>
                       {contact.address || "-"}
@@ -477,6 +480,7 @@ export default function ContactList({ contacts, deals, isLoading, isAdmin, admin
                         Business Information
                       </h4>
                       <InfoRow label="Company" value={viewContact.company} icon={<Building className="h-3.5 w-3.5" />} />
+                      <InfoRow label="Industry" value={viewContact.industryGroup || viewContact.industryType ? industryLabel(viewContact.industryGroup, viewContact.industryType) : null} />
                       <InfoRow label="List" value={viewContact.leadList ? leadListLabel(viewContact.leadList) : null} />
                       <InfoRow label="Lead type" value={viewContact.leadType ? leadTypeLabel(viewContact.leadType) : null} />
                       <InfoRow label="Has Website" value={viewContact.hasWebsite} />

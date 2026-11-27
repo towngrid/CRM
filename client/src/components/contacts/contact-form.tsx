@@ -13,6 +13,7 @@ import { insertContactSchema, type Contact, type InsertContact } from "@shared/s
 import { apiRequest } from "@/lib/queryClient";
 import { DuplicateResolutionDialog } from "./duplicate-resolution-dialog";
 import { LEAD_LISTS, leadTypesForList } from "@shared/leadTypes";
+import { useIndustries } from "@/hooks/useIndustries";
 
 interface ContactFormProps {
   contact?: Contact;
@@ -46,6 +47,7 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
     onError: () => setOwnerSearch({ status: "not_found" }),
   });
   
+  const { groups, typesFor } = useIndustries();
   const form = useForm<InsertContact>({
     resolver: zodResolver(insertContactSchema),
     defaultValues: {
@@ -63,7 +65,8 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
       zipCode: contact?.zipCode || "",
       company: contact?.company || "",
       jobTitle: contact?.jobTitle || "",
-      businessType: contact?.businessType || "salon",
+      industryGroup: contact?.industryGroup || "",
+      industryType: contact?.industryType || "",
       leadList: (contact?.leadList || "") as "get_seen" | "ordering" | "",
       leadType: contact?.leadType || "",
       hasWebsite: contact?.hasWebsite || "",
@@ -571,30 +574,55 @@ export default function ContactForm({ contact, onSuccess, onCancel }: ContactFor
             />
           </div>
 
-          <FormField
-            control={form.control}
-            name="businessType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Business Type *</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value || "salon"}
-                >
-                  <FormControl>
-                    <SelectTrigger data-testid="select-businessType">
-                      <SelectValue placeholder="Select type..." />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="salon">Salon</SelectItem>
-                    <SelectItem value="mobile">Mobile</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="industryGroup"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select
+                    onValueChange={(v) => {
+                      field.onChange(v === "__none" ? "" : v);
+                      const type = form.getValues("industryType");
+                      if (type && !typesFor(v).includes(type)) form.setValue("industryType", "");
+                    }}
+                    value={field.value || "__none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-industryGroup"><SelectValue placeholder="Not set" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none">Not set</SelectItem>
+                      {field.value && !groups.includes(field.value) && <SelectItem value={field.value}>{field.value}</SelectItem>}
+                      {groups.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="industryType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type of business</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "__none" ? "" : v)} value={field.value || "__none"} disabled={!form.watch("industryGroup")}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-industryType"><SelectValue placeholder="Not set" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none">Not set</SelectItem>
+                      {field.value && !typesFor(form.watch("industryGroup")).includes(field.value) && <SelectItem value={field.value}>{field.value}</SelectItem>}
+                      {typesFor(form.watch("industryGroup")).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}

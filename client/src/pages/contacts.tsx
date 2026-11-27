@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LEAD_LISTS, leadTypesForList } from "@shared/leadTypes";
+import { useIndustries } from "@/hooks/useIndustries";
+import { IndustryFilterSelect, matchesIndustry } from "@/components/industry-filter";
 import { Download, Users, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +31,8 @@ export default function Contacts() {
   const [selectedContact, setSelectedContact] = useState<Contact | undefined>();
   const [showArchived, setShowArchived] = useState(false);
   const [leadTypeFilter, setLeadTypeFilter] = useState<string>("all");
+  const [industryFilter, setIndustryFilter] = useState<string>("all");
+  const { industries } = useIndustries();
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [deleteTargets, setDeleteTargets] = useState<Contact[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -291,6 +295,8 @@ export default function Contacts() {
       list = list.filter(c => c.leadType === leadTypeFilter);
     }
 
+    list = list.filter(c => matchesIndustry(industryFilter, c.industryGroup, c.industryType));
+
     if (sortColumn) {
       list.sort((a, b) => {
         let aVal: string | number = "";
@@ -322,7 +328,7 @@ export default function Contacts() {
     }
 
     return list;
-  }, [contacts, sortColumn, sortDir, leadTypeFilter]);
+  }, [contacts, sortColumn, sortDir, leadTypeFilter, industryFilter]);
 
   return (
     <>
@@ -330,7 +336,7 @@ export default function Contacts() {
         title="Contacts" 
         onSearch={setSearchQuery}
         onAddNew={() => setIsFormOpen(true)}
-        onImport={() => window.location.assign("/leads?upload=1")}
+        onImport={() => setIsImportOpen(true)}
         showImportButton={true}
         addButtonText="Add Contact"
         customActions={
@@ -380,7 +386,7 @@ export default function Contacts() {
       />
       
       <main className="flex-1 min-h-0 overflow-auto p-6 bg-muted/30" data-testid="contacts-content">
-        <p className="mb-4 text-sm text-muted-foreground">Contacts store reviewed business and person details. Find or upload new businesses in Leads, track sales opportunities in Pipeline, and confirm messages separately in Outreach.</p>
+        <p className="mb-4 text-sm text-muted-foreground">Contacts store reviewed business and person details. Find new businesses in Business Search, track sales opportunities in Pipeline, and confirm messages separately in Outreach.</p>
         <div className="flex items-center gap-3 mb-4">
           <span className="text-sm font-medium text-muted-foreground">Lead type:</span>
           <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
@@ -401,7 +407,9 @@ export default function Contacts() {
               <SelectItem value="none">No lead type yet</SelectItem>
             </SelectContent>
           </Select>
-          {leadTypeFilter !== "all" && (
+          <span className="text-sm font-medium text-muted-foreground ml-2">Industry:</span>
+          <IndustryFilterSelect value={industryFilter} onChange={setIndustryFilter} industries={industries} />
+          {(leadTypeFilter !== "all" || industryFilter !== "all") && (
             <span className="text-xs text-muted-foreground ml-1">
               ({sortedContacts.length} contact{sortedContacts.length !== 1 ? "s" : ""})
             </span>

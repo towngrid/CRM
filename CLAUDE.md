@@ -54,6 +54,8 @@ A private sales tool for TownGrid, built from a copy of ESyCRM. It finds local b
 
 ## To-do (agreed with Seann)
 - Seann's check of 3c, then Step 4 on his OK. In Step 4:
-  - Remove the old salon pages (Leads upload, Lead Discovery, salon enrichment, salon search report) and the contact "Business Type" (salon/mobile) field. **Drop it; do not reuse it.** The Industry column from the Snap spec replaces it (ask Seann for that spec before building it).
+  - Remove the old salon pages (Leads upload, Lead Discovery, salon enrichment, salon search report) and the contact "Business Type" (salon/mobile) field. **Drop it; do not reuse it.**
+  - Build **only Part 2 of `docs/PHOTO-LEAD-CAPTURE-SPEC.md`** (the Industry field: group + type, one editable list kept with Plans & prices; column and filter in Business Search, Contacts and exports, filter only on Pipeline). It replaces the salon/mobile Business Type. **Do not start Part 1 (Snap a Lead) until Seann says so.**
+  - Step 4 research fields follow `docs/PRE-VISIT-RESEARCH.md` (the lead-finder and Snap specs both point to it; it is not in the repo yet: ask Seann for it).
   - Fold the Pass 3 hand checklist (cover photo looks bad, anything Google got wrong, followers, last post) into the Step 4 research fields: one screen, not two.
 - Not built yet: chain detection beyond "same name at 2+ addresses" plus the website hint above; "no in-person service" and "outside target industries" are set aside by hand.

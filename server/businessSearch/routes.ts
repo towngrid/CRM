@@ -108,6 +108,7 @@ export function leadRow(lead: BusinessLead) {
     "Still open?": lead.stillOpenFlag ? `Check: ${(f.stillOpen?.reasons ?? []).join("; ")}` : "",
     "Google AI summary": f.stillOpen?.aiSummary ?? "",
     "Google listing": lead.googleUrl ?? "",
+    "Possible chain": f.website?.possibleChain ?? "",
     "Google profile checked": f.pass2?.at ? String(f.pass2.at).slice(0, 10) : "",
     "Unclaimed on Google": f.pass2 ? (f.pass2.unclaimed ? "Yes" : "No") : "",
     "Owner replies (newest 10 reviews)": f.pass2 ? `${f.pass2.ownerRepliesOfNewest10} of ${f.pass2.reviewsChecked}` : "",

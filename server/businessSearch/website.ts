@@ -153,6 +153,42 @@ export function copyrightYear(html: string, now = new Date()): number | null {
   return best;
 }
 
+// ── Possible chain (Nov 27): a Locations page, or 2+ addresses on their own site ──
+// Uses only the pages already read, so it costs nothing. A hint for Seann, never an automatic knock-out.
+
+/** A link to a "Locations" page (plural): "/locations", "Our Locations", "Find a location". */
+export function locationsLink(html: string, pageUrl: string): string | null {
+  const base = hostOf(pageUrl);
+  for (const link of hrefs(html, pageUrl)) {
+    if (hostOf(link.url) !== base) continue;
+    const path = new URL(link.url).pathname.toLowerCase();
+    if (/(^|\/)(locations|our-locations|all-locations|find-a-location|store-locator)(\/|$)/.test(path) ||
+        /\b(our )?locations\b|\bfind a location\b|\bstore locator\b/.test(link.text)) {
+      return link.url.split("#")[0];
+    }
+  }
+  return null;
+}
+
+const STREET = /\b\d{1,5}\s+(?:[NSEW]\.?\s+)?(?:[A-Z][a-z]+\.?\s+){1,3}(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Hwy|Highway|Pkwy|Parkway|Tpke|Turnpike|Ln|Lane|Dr|Drive|Pl|Place|Sq|Square|Ct|Court|Way|Plaza)\b\.?/g;
+
+/** Street addresses written on a page, simplified for comparing ("40 school st"). */
+export function streetAddresses(html: string): string[] {
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/gi, " ").replace(/\s+/g, " ");
+  const norm = (a: string) => a.toLowerCase().replace(/\./g, "")
+    .replace(/\bstreet\b/g, "st").replace(/\bavenue\b/g, "ave").replace(/\broad\b/g, "rd").replace(/\bboulevard\b/g, "blvd")
+    .replace(/\bhighway\b/g, "hwy").replace(/\bparkway\b/g, "pkwy").replace(/\bturnpike\b/g, "tpke").replace(/\blane\b/g, "ln")
+    .replace(/\bdrive\b/g, "dr").replace(/\bplace\b/g, "pl").replace(/\bsquare\b/g, "sq").replace(/\bcourt\b/g, "ct").trim();
+  return Array.from(new Set(Array.from(text.matchAll(STREET)).map(m => norm(m[0]))));
+}
+
+export function possibleChainReason(locations: string | null, addresses: string[]): string | null {
+  if (locations) return `their website has a Locations page (${new URL(locations).pathname})`;
+  if (addresses.length >= 2) return `their website lists ${addresses.length} addresses (${addresses.slice(0, 3).join("; ")})`;
+  return null;
+}
+
 export function hasViewport(html: string): boolean {
   return /<meta[^>]+name\s*=\s*["']?viewport/i.test(html);
 }
@@ -335,6 +371,8 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
   const siteHost = hostOf(home.finalUrl);
   const emails: FoundEmail[] = emailsIn(home.html, home.finalUrl, siteHost);
   const addEmails = (list: FoundEmail[]) => { for (const e of list) if (!emails.some(x => x.email === e.email)) emails.push(e); };
+  let locations = locationsLink(home.html, home.finalUrl);
+  const addresses = new Set(streetAddresses(home.html));
   result.socialLinks = socialLinksIn(home.html, home.finalUrl);
   result.orderingLinks = orderingLinksIn(home.html, home.finalUrl);
   result.jsLoaded = (website.builder != null && JS_BUILDERS.has(website.builder)) || visibleTextLength(home.html) < 400;
@@ -345,6 +383,8 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
       website.pagesRead.push(p.finalUrl);
       if (!form && hasContactForm(p.html)) form = true;
       addEmails(emailsIn(p.html, p.finalUrl, siteHost));
+      locations = locations ?? locationsLink(p.html, p.finalUrl);
+      for (const a of streetAddresses(p.html)) addresses.add(a);
       const year = copyrightYear(p.html);
       if (year && (!website.copyrightYear || year > website.copyrightYear)) website.copyrightYear = year;
       for (const [key, link] of Object.entries(socialLinksIn(p.html, p.finalUrl)) as [SocialKey, FoundLink][]) {
@@ -366,6 +406,7 @@ export async function checkWebsite(url: string | null, source: WebsiteFindings["
   }
   website.contactForm = form ? "yes" : (result.jsLoaded ? "unknown" : "no");
   website.emails = sortEmails(emails).slice(0, 5);
+  website.possibleChain = possibleChainReason(locations, Array.from(addresses));
   return result;
 }
 

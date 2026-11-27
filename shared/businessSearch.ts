@@ -251,6 +251,8 @@ export interface WebsiteFindings {
   pagesRead: string[];
   /** Public emails shown on their own website, with the page each was on (never guessed). */
   emails?: FoundEmail[];
+  /** Their own site has a Locations page or lists 2+ addresses (Nov 27): a hint to check, not a knock-out. */
+  possibleChain?: string | null;
 }
 
 export interface FoundEmail {

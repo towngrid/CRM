@@ -473,6 +473,12 @@ function ScorePanel({ lead }: { lead: Lead }) {
         </div>
       ) : (
         <>
+          {lead.findings?.website?.possibleChain && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+              <span><b>Possible chain:</b> {lead.findings.website.possibleChain}.</span>
+              <Button size="sm" variant="outline" onClick={() => setAside.mutate("chain or group (" + lead.findings.website.possibleChain + ")")} disabled={setAside.isPending}>Set aside as chain</Button>
+            </div>
+          )}
           {lead.scoreReasons?.length ? (
             <ul className="flex flex-wrap gap-1.5">
               {lead.scoreReasons.map(r => <li key={r.key}><Badge variant="secondary">{r.points > 0 ? "+" : ""}{r.points} {r.text}</Badge></li>)}
@@ -742,7 +748,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
                 <TableRow className={`cursor-pointer ${l.setAsideReason ? "opacity-60" : ""}`} onClick={() => setOpen(open === l.id ? null : l.id)} data-testid={`row-lead-${l.id}`}>
                   <TableCell>{open === l.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
                   <TableCell>{l.checkStatus === "checked" ? <TierBadge lead={l} /> : "—"}</TableCell>
-                  <TableCell className="font-medium">{l.name}{l.contactId && <Badge className="ml-2" variant="outline">Approved</Badge>}</TableCell>
+                  <TableCell className="font-medium">{l.name}{l.contactId && <Badge className="ml-2" variant="outline">Approved</Badge>}{l.findings?.website?.possibleChain && !l.setAsideReason && <Badge className="ml-2" variant="outline" title={l.findings.website.possibleChain}>Possible chain</Badge>}</TableCell>
                   <TableCell>{l.town ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{l.phone ?? "—"}</TableCell>
                   <TableCell>{l.checkStatus === "checked" ? emailCell(l) : "—"}</TableCell>

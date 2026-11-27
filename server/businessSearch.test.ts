@@ -266,3 +266,26 @@ test("Pass 2 reads reviews and posts from SerpAPI's shapes", async () => {
   assert.deepEqual(readPostDates([{ posted_at: "2025-12-08T02:43:32Z" }, { date: "Jan 14, 2025" }, { title: "no date" }]).map(d => d.slice(0, 10)),
     ["2025-12-08", "2025-01-14"]);
 });
+
+test("possible chain: a Locations page or 2+ addresses on their own site (no extra credits)", async () => {
+  const { locationsLink, streetAddresses, possibleChainReason } = await import("./businessSearch/website");
+  assert.equal(locationsLink(`<a href="/locations">Locations</a>`, "https://www.piopio.com/"), "https://www.piopio.com/locations");
+  assert.equal(locationsLink(`<a href="/visit">Our Locations</a>`, "https://x.example/"), "https://x.example/visit");
+  assert.equal(locationsLink(`<a href="/location">Location & Hours</a>`, "https://x.example/"), null, "one 'Location' page is a single restaurant");
+  assert.equal(locationsLink(`<a href="https://other.example/locations">Locations</a>`, "https://x.example/"), null, "another site's page doesn't count");
+  // The same address in the header and footer is one address; two different ones flag.
+  assert.deepEqual(streetAddresses(`<header>40 School Street, Glen Cove</header><footer>40 School St.</footer>`), ["40 school st"]);
+  const two = streetAddresses(`<p>51 Cedar Swamp Rd, Glen Cove</p><p>920 Franklin Avenue, Garden City</p>`);
+  assert.equal(two.length, 2);
+  assert.match(possibleChainReason(null, two) ?? "", /lists 2 addresses/);
+  assert.equal(possibleChainReason(null, ["40 school st"]), null);
+});
+
+test("the website check records a possible chain from the pages it already reads", async () => {
+  const opened: string[] = [];
+  const home = `<html><head><meta name="viewport" content="width=device-width"></head><body>${"Peruvian chicken since 1995. ".repeat(30)}
+    <a href="/locations">Locations</a><a href="/menu">Menu</a></body></html>`;
+  const runtime = fakeRuntime({ "https://chain.example/": { status: 200, body: home }, "https://chain.example/menu": { status: 200, body: "<p>menu</p>" } }, opened);
+  const result = await checkWebsite("https://chain.example/", "google", runtime);
+  assert.match(result.website.possibleChain ?? "", /Locations page/);
+});

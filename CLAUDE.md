@@ -46,6 +46,14 @@ A private sales tool for TownGrid, built from a copy of ESyCRM. It finds local b
   - **Glen Cove test** (restaurants in 11542, Nov 24-27): 19 businesses; 71 SerpAPI credits in total this month (Maps + Pass 1 35, email search 4, Pass 2 32) and $0.40 AI. Emails for 11 of 19. Tiers: A 5 (Plado 110, The Metropolitan 100 with an unclaimed profile, Pio Pio 10 90 (a chain: set aside by hand?), La Vicharra 90, Oak & Vine 85), B 4, C 10.
   - Progress report for Seann's Claude.ai planning: `docs/PROGRESS-2026-11-27.md`.
 
+## Decisions Nov 27 (Seann, from his Claude.ai planning)
+- Possible chain: Pass 1 flags a business when its own website has a Locations page or lists 2+ different street addresses (`locationsLink`/`streetAddresses` in `server/businessSearch/website.ts`, findings.website.possibleChain). A hint with a "Set aside as chain" button, never an automatic knock-out; no extra credits. Pio Pio 10 set aside by hand (chain).
+- The Metropolitan's gmail stays (it was on their own catering site, within the rules); confirm it's current on the visit or call.
+- The 3 Glen Cove A/B restaurants with no email (Green Eats, La Vicharra, Forest Ave Grill): Seann walks in or calls; no more searching.
+- Reports by lead type/score: wait until businesses are actually being contacted.
+
 ## To-do (agreed with Seann)
-- Seann's check of 3c, then Step 4 (contact/deal research fields and the printable Pre-visit brief), on his OK.
-- Open: Pass 3 hand checklist (cover photo, "Google got something wrong") not built yet; only followers, last post date and email are hand-entered. Chain detection only spots the same name at 2+ addresses (Pio Pio 10 missed); "no in-person service" and "outside target industries" are set aside by hand. Reports per lead type/score (which ones sign) not built yet. The old salon Leads/Lead Discovery pages are out of the menu but their code remains, as does the contact "Business Type" (salon/mobile).
+- Seann's check of 3c, then Step 4 on his OK. In Step 4:
+  - Remove the old salon pages (Leads upload, Lead Discovery, salon enrichment, salon search report) and the contact "Business Type" (salon/mobile) field. **Drop it; do not reuse it.** The Industry column from the Snap spec replaces it (ask Seann for that spec before building it).
+  - Fold the Pass 3 hand checklist (cover photo looks bad, anything Google got wrong, followers, last post) into the Step 4 research fields: one screen, not two.
+- Not built yet: chain detection beyond "same name at 2+ addresses" plus the website hint above; "no in-person service" and "outside target industries" are set aside by hand.

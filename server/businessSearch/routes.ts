@@ -335,9 +335,9 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
     }
   });
 
-  // ── Pass 2: Google profile check, businesses scoring at the tier B line (40) or more ──
+  // ── Pass 2: Google profile check, businesses scoring at least the "pass2_from" line (40) before it ──
   async function pass2Candidates(searchId: string, user: string, all = false) {
-    const line = (await loadScorePoints()).find(p => p.key === "tier_b")?.points ?? 40;
+    const line = (await loadScorePoints()).find(p => p.key === "pass2_from")?.points ?? 40;
     const leads = await db.select().from(businessLeads).where(and(eq(businessLeads.searchId, searchId), eq(businessLeads.userId, user)));
     return { line, leads: leads.filter(l => l.checkStatus === "checked" && !l.setAsideReason && (l.score ?? 0) >= line && (all || !(l.findings as any)?.pass2)) };
   }

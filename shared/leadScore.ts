@@ -41,6 +41,8 @@ export const DEFAULT_SCORE_POINTS: readonly ScorePoint[] = [
   { key: "recent_social_post", group: "alive", label: "Your hand check: posted on Facebook/Instagram in the last 30 days", points: 10, source: "Hand check" },
   { key: "tier_a", group: "tiers", label: "Tier A from (visit or call first)", points: 60, source: "Tier" },
   { key: "tier_b", group: "tiers", label: "Tier B from (cold email); below is C (later)", points: 40, source: "Tier" },
+  // Kept apart from the tier lines (Nov 27): a business at 45 before its Google check can score 100 after it.
+  { key: "pass2_from", group: "tiers", label: "Run the Google profile check for businesses scoring at least (before the check)", points: 40, source: "Tier" },
 ];
 
 export const SCORE_GROUP_LABELS: Record<ScoreGroup, string> = {

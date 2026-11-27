@@ -479,7 +479,7 @@ function ScorePanel({ lead }: { lead: Lead }) {
             </ul>
           ) : <p className="text-muted-foreground">No points: little for TownGrid to fix here.</p>}
           <p className="text-xs text-muted-foreground">
-            {lead.findings?.pass2 ? "Includes the Google profile check." : "Google profile points (unclaimed, owner replies, Updates, photos, recent reviews) come from the Google profile check, run for businesses scoring 40 or more."}
+            {lead.findings?.pass2 ? "Includes the Google profile check." : "Google profile points (unclaimed, owner replies, Updates, photos, recent reviews) come from the Google profile check, run for businesses scoring 40 or more (Settings → Opportunity score)."}
             {" "}Change point values in Settings → Opportunity score.
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -671,7 +671,7 @@ function Results({ id, onBack, isAdmin }: { id: string; onBack: () => void; isAd
             {isAdmin && (s.status === "stopped" || s.status === "failed") && <Button size="sm" onClick={() => action.mutate("resume")}><Play className="mr-2 h-4 w-4" />Resume</Button>}
             {isAdmin && (s.status === "done" || s.status === "stopped" || s.status === "failed") && <Button size="sm" variant="outline" onClick={() => setRecheckOpen(true)}>Check again</Button>}
             {isAdmin && s.status === "done" && !s.emailJob?.running && <Button size="sm" variant="outline" onClick={() => setFindOpen(true)} data-testid="button-find-emails">Find missing emails</Button>}
-            {isAdmin && s.status === "done" && !s.pass2Job?.running && <Button size="sm" variant="outline" onClick={() => setPass2Open(true)} data-testid="button-pass2">Check Google profiles (40+)</Button>}
+            {isAdmin && s.status === "done" && !s.pass2Job?.running && <Button size="sm" variant="outline" onClick={() => setPass2Open(true)} data-testid="button-pass2">Check Google profiles</Button>}
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=csv`}><Download className="mr-2 h-4 w-4" />CSV</a></Button>
             <Button size="sm" variant="outline" asChild><a href={`/api/business-search/${id}/export?format=xlsx`}><Download className="mr-2 h-4 w-4" />Excel</a></Button>
           </div>

@@ -118,3 +118,9 @@ test("Pass 2 (Google profile check) points", () => {
   active.findings = { ...active.findings, pass2: { unclaimed: false, ownerRepliesOfNewest10: 8, reviewsChecked: 10, unansweredBadReview: false, newestReviewDate: "2026-11-20T00:00:00Z", newestUpdateDate: "2026-11-01T00:00:00Z", ownerPhotoCount: 10 } };
   assert.deepEqual(keys(scoreLead(active, points)), ["good_rating", "recent_review"]);
 });
+
+test("the Google check's line is separate from the tier lines", () => {
+  const p = mergeScorePoints({ tier_a: 85, tier_b: 60 });
+  assert.equal(p.find(x => x.key === "pass2_from")?.points, 40);
+  assert.equal(scoreLead(base(), mergeScorePoints({ good_rating: 70, tier_a: 85, tier_b: 60 })).tier, "B");
+});

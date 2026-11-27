@@ -1,6 +1,7 @@
 // Business Search API (Step 3a). Searches cost SerpAPI credits, so starting one is admin-only
 // and needs `confirm: true` after the screen has shown the estimate.
 import type { Express, RequestHandler } from "express";
+import Anthropic from "@anthropic-ai/sdk";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as XLSX from "xlsx";
@@ -265,8 +266,20 @@ export function registerBusinessSearchRoutes(app: Express, isAuthenticated: Requ
   });
 
   // Admin: which ANTHROPIC variables the CRM sees (names and value type only, never the key).
-  app.get("/api/admin/ai-key-check", isAdmin, (_req, res) => {
-    res.json({ aiKeySet: aiKeySet(), variables: aiKeyDiagnostics() });
+  app.get("/api/admin/ai-key-check", isAdmin, async (_req, res) => {
+    // Free live test: listing models costs nothing and proves Anthropic accepts the key.
+    let live: { ok: boolean; detail: string } = { ok: false, detail: "no key" };
+    if (aiKeySet()) {
+      try {
+        const page = await new Anthropic().models.list({ limit: 1 });
+        live = { ok: true, detail: `key accepted (${page.data.length ? "models listed" : "no models listed"})` };
+      } catch (error) {
+        live = { ok: false, detail: error instanceof Anthropic.AuthenticationError ? "Anthropic rejected the key (wrong or deleted key)"
+          : error instanceof Anthropic.PermissionDeniedError ? "key works but lacks permission"
+          : `could not reach Anthropic: ${String((error as Error)?.message ?? error).slice(0, 120)}` };
+      }
+    }
+    res.json({ aiKeySet: aiKeySet(), variables: aiKeyDiagnostics(), live });
   });
 
   // ── Find missing emails (paid steps 3–4). Free estimate first, then confirm. ──

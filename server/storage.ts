@@ -1,4 +1,5 @@
 // From Replit Auth and Database blueprints
+import { stageLabel } from "@shared/dealStages";
 import { CONTACT_OWNER_LOOKUP_PURPOSE, contactOwnerLookupIdentity, contactOwnerLookupMatches } from "@shared/contactOwnerLookup";
 import { 
   type Contact, 
@@ -699,7 +700,7 @@ export class DatabaseStorage implements IStorage {
     // Create activity
     await this.createActivity({
       type: "contact_added",
-      description: `New contact ${contact.firstName} ${contact.lastName} added`,
+      description: `New contact ${contact.company || [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "added"} added`,
       contactId: contact.id,
     }, userId);
     
@@ -921,6 +922,8 @@ export class DatabaseStorage implements IStorage {
     // Set stageChangedAt timestamp if stage is being changed
     if (updateData.stage && updateData.stage !== existing.stage) {
       dealUpdateData.stageChangedAt = new Date();
+      // Moving a deal to Won by any route records when it was won (the dashboard counts sales by month).
+      if (updateData.stage === "won" && !updateData.wonDate && !existing.wonDate) dealUpdateData.wonDate = new Date();
     }
 
     const whereClause = userId === null 
@@ -937,7 +940,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.stage && updateData.stage !== existing.stage) {
       await this.createActivity({
         type: "deal_stage_changed",
-        description: `Deal "${updated.title}" moved to ${updateData.stage}`,
+        description: `Deal "${updated.title}" moved to ${stageLabel(updateData.stage)}`,
         dealId: id,
         contactId: updated.contactId || undefined,
       }, updated.userId);

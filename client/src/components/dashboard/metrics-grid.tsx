@@ -1,13 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, Handshake, DollarSign, CheckCircle } from "lucide-react";
-
-interface DashboardMetrics {
-  totalContacts: number;
-  activeDeals: number;
-  monthlyRevenue: number;
-  tasksCompleted: number;
-}
+import { monthLine, type DashboardMetrics } from "@shared/dashboardMetrics";
 
 export default function MetricsGrid() {
   const { data: metrics, isLoading } = useQuery<DashboardMetrics>({
@@ -23,42 +17,42 @@ export default function MetricsGrid() {
     }).format(amount);
   };
 
+  const empty = { thisMonth: 0, lastMonth: 0 };
+  // Each card: a real number, and a real "this month · last month" line underneath.
   const metricCards = [
     {
       title: "Total Contacts",
-      value: metrics?.totalContacts || 0,
+      value: metrics?.totalContacts ?? 0,
       icon: Users,
       iconBg: "bg-primary/10",
       iconColor: "text-primary",
-      change: "+12%",
-      changeColor: "text-accent",
+      line: `Added from Business Search: ${monthLine(metrics?.contactsAdded ?? empty).toLowerCase()}`,
     },
     {
       title: "Active Deals",
-      value: metrics?.activeDeals || 0,
+      value: metrics?.activeDeals ?? 0,
       icon: Handshake,
       iconBg: "bg-accent/10",
       iconColor: "text-accent",
-      change: "+5%",
-      changeColor: "text-accent",
+      line: `New deals: ${monthLine(metrics?.newDeals ?? empty).toLowerCase()}`,
     },
     {
-      title: "Monthly Revenue",
-      value: formatCurrency(metrics?.monthlyRevenue || 0),
+      title: "Won This Month",
+      value: formatCurrency(metrics?.wonRevenue.thisMonth ?? 0),
       icon: DollarSign,
       iconBg: "bg-accent/10",
       iconColor: "text-accent",
-      change: "+18%",
-      changeColor: "text-accent",
+      line: (metrics?.wonDeals.thisMonth || metrics?.wonDeals.lastMonth)
+        ? `${metrics!.wonDeals.thisMonth} deal${metrics!.wonDeals.thisMonth === 1 ? "" : "s"} won · last month ${formatCurrency(metrics!.wonRevenue.lastMonth)}`
+        : "No deals won yet",
     },
     {
       title: "Tasks Completed",
-      value: metrics?.tasksCompleted || 0,
+      value: metrics?.tasksCompleted ?? 0,
       icon: CheckCircle,
       iconBg: "bg-primary/10",
       iconColor: "text-primary",
-      change: "-2%",
-      changeColor: "text-destructive",
+      line: monthLine(metrics?.tasksCompletedByMonth ?? empty),
     },
   ];
 
@@ -105,12 +99,7 @@ export default function MetricsGrid() {
                   <Icon className={`${metric.iconColor} h-6 w-6`} />
                 </div>
               </div>
-              <div className="mt-4 flex items-center text-sm">
-                <span className={`${metric.changeColor} mr-1`}>
-                  {metric.change}
-                </span>
-                <span className="text-muted-foreground">from last month</span>
-              </div>
+              <p className="mt-4 text-sm text-muted-foreground" data-testid={`metric-line-${index}`}>{metric.line}</p>
             </CardContent>
           </Card>
         );

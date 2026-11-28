@@ -73,9 +73,6 @@ export default function RecentActivity() {
     <Card data-testid="recent-activity-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
-        <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
-          View All
-        </Button>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -112,7 +109,7 @@ export default function RecentActivity() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground">
-                      {activity.description}
+                      {(activity as Activity & { text?: string }).text ?? activity.description}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {getTimeAgo(activity.createdAt)}

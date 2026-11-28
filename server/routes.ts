@@ -49,6 +49,11 @@ import { registerDealPlanRoutes, seedDealPlans } from "./dealPlanRoutes";
 import { registerBusinessSearchRoutes } from "./businessSearch/routes";
 import { registerIndustryRoutes } from "./industryRoutes";
 import { registerResearchRoutes } from "./researchRoutes";
+import { dashboardMetrics } from "@shared/dashboardMetrics";
+import { activityText, contactDisplayName } from "@shared/activityText";
+import { db as metricsDb } from "./db";
+import { businessLeads } from "@shared/schema";
+import { and as dAnd, eq as dEq, isNotNull } from "drizzle-orm";
 import { APP_NAME, getAdminAlertEmails, getAppUrl, isOutreachSendingEnabled, OUTREACH_OFF_MESSAGE, getSerpApiKey } from "./appConfig";
 import { leadListLabel, leadTypeLabel } from "@shared/leadTypes";
 import { DEAL_STAGE_VALUES, stageLabel } from "@shared/dealStages";
@@ -1717,7 +1722,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit ? parseInt(limit as string) : 10,
         userId
       );
-      res.json(activities);
+      // Add a readable line for each (Step 5): names from contacts, stage labels, no raw data.
+      const allContacts = await storage.getContacts(userId);
+      const names = new Map(allContacts.map(c => [c.id, contactDisplayName(c)]));
+      res.json(activities.map(a => ({ ...a, text: activityText(a, id => (id ? names.get(id) ?? null : null)) })));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch activities" });
     }
@@ -1731,23 +1739,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deals = await storage.getDeals(userId);
       const tasks = await storage.getTasks(userId);
       
-      const activeDeals = deals.filter(deal => 
-        !["won", "lost"].includes(deal.stage)
-      );
-      
-      const completedTasks = tasks.filter(task => task.status === "completed");
-      const monthlyRevenue = deals
-        .filter(deal => deal.stage === "won")
-        .reduce((sum, deal) => sum + parseFloat(deal.value || "0"), 0);
-
-      const metrics = {
-        totalContacts: contacts.length,
-        activeDeals: activeDeals.length,
-        monthlyRevenue,
-        tasksCompleted: completedTasks.length,
-      };
-
-      res.json(metrics);
+      // Real month-by-month figures (Step 5): no typed-in percentages.
+      const approved = await metricsDb.select({ approvedAt: businessLeads.approvedAt }).from(businessLeads)
+        .where(userId ? dAnd(dEq(businessLeads.userId, userId), isNotNull(businessLeads.approvedAt)) : isNotNull(businessLeads.approvedAt));
+      res.json(dashboardMetrics({ contacts, deals, tasks, approvedDates: approved.map(a => a.approvedAt) }));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch dashboard metrics" });
     }

@@ -2518,95 +2518,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Brevo inbound parse webhook - PUBLIC endpoint for receiving email replies
-  app.post("/api/webhooks/sendgrid/inbound", async (req: any, res) => {
-    try {
-      console.log("[Inbound] Received webhook. Content-Type:", req.headers["content-type"]);
-      console.log("[Inbound] Body type:", Array.isArray(req.body) ? "array" : typeof req.body);
-
-      // Brevo sends inbound emails as a JSON array of message objects
-      // Fall back to legacy form-urlencoded format (SendGrid-style) if not Brevo format
-      let from = "";
-      let subject = "";
-      let text = "";
-      let html = "";
-
-      const body = req.body;
-
-      if (Array.isArray(body) && body.length > 0) {
-        // Brevo inbound JSON format
-        const msg = body[0];
-        const fromAddr = msg.From?.Address || "";
-        const fromName = msg.From?.Name || "";
-        from = fromName ? `${fromName} <${fromAddr}>` : fromAddr;
-        subject = msg.Subject || "";
-        text = msg.RawTextBody || "";
-        html = msg.RawHtmlBody || "";
-        console.log(`[Inbound] Brevo format — from: ${from}, subject: ${subject}`);
-      } else if (typeof body === "object" && body.from) {
-        // Legacy form-urlencoded format
-        from = body.from || "";
-        subject = body.subject || "";
-        text = body.text || "";
-        html = body.html || "";
-        console.log(`[Inbound] Legacy format — from: ${from}, subject: ${subject}`);
-      } else {
-        console.log("[Inbound] Unrecognized body format, ignoring.");
-        return res.status(200).send("OK");
-      }
-
-      // Extract plain email address from "Name <email@domain.com>" format
-      const fromEmailMatch = from.match(/<(.+?)>/);
-      const fromEmail = fromEmailMatch ? fromEmailMatch[1] : from.trim();
-
-      // Try to find the contact by email
-      const contacts = await storage.getContacts(null);
-      const contact = contacts.find(c => c.email?.toLowerCase() === fromEmail.toLowerCase());
-
-      if (!contact) {
-        console.log(`[Inbound] Email from unknown sender: ${fromEmail} — ignoring`);
-        return res.status(200).send("OK");
-      }
-
-      // Create inbox message for the contact's owner (salesperson)
-      await storage.createInboxMessage({
-        contactId: contact.id,
-        emailSequenceLogId: null,
-        from,
-        subject,
-        bodyText: text,
-        bodyHtml: html,
-        isRead: "false"
-      }, contact.userId);
-
-      console.log(`[Inbound] Created inbox message from ${fromEmail} for salesperson ${contact.userId}`);
-
-      // Cancel all pending (scheduled) sequence emails for this contact — they replied
-      try {
-        const allLogs = await storage.getEmailSequenceLogs(null, contact.id);
-        const pendingLogs = allLogs.filter(l => l.status === "pending");
-        if (pendingLogs.length > 0) {
-          await Promise.all(pendingLogs.map(l => storage.deleteEmailSequenceLog(l.id, null)));
-          console.log(`[Inbound] Cancelled ${pendingLogs.length} pending sequence(s) for contact ${contact.id} after reply from ${fromEmail}`);
-        }
-      } catch (cancelErr) {
-        console.error("[Inbound] Failed to cancel pending sequences after reply:", cancelErr);
-      }
-
-      // Notify the salesperson
-      const salesperson = await storage.getUser(contact.userId);
-      if (salesperson) {
-        const contactName = `${contact.firstName} ${contact.lastName || ""}`.trim();
-        sendReplyNotificationEmail({ salesperson, contactName }).catch(err => {
-          console.error("[Inbound] Failed to send reply notification:", err);
-        });
-      }
-
-      res.status(200).send("OK");
-    } catch (error) {
-      console.error("[Inbound] Error processing inbound email:", error);
-      res.status(500).json({ message: "Failed to process inbound email" });
-    }
+  // Old ESyCRM reply route (Brevo inbound parsing), switched off Nov 28 at Seann's request.
+  // It was public with no check of the sender, so anyone could plant a fake "reply" in the Inbox
+  // and cancel that contact's scheduled emails. TownGrid never sends cold email through Brevo;
+  // replies will be read from the seann@towngrid.contact Gmail mailbox (Step 6).
+  app.post("/api/webhooks/sendgrid/inbound", (_req, res) => {
+    console.log("[Inbound] Old Brevo reply route called; it is switched off. Ignored.");
+    res.status(410).json({ message: "This reply route is switched off." });
   });
 
   // Lead Discovery Routes
